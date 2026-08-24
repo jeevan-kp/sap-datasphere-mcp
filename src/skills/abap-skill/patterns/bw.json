@@ -1,0 +1,24 @@
+{
+  "bw_patterns": {
+    "transformation": "BEGIN\\s+OF\\s+TRANSFORMATION\\s+(\\w+)",
+    "end_transformation": "END\\s+OF\\s+TRANSFORMATION",
+    "rule": "(\\w+)\\s*->\\s*(\\w+)(?:\\s*\\((.+?)\\))?",
+    "source_fields": "SOURCE\\s+FIELDS:\\s*(.+?)\\s*TARGET",
+    "target_fields": "TARGET\\s+FIELDS:\\s*(.+?)(?:\\s*END|$)"
+  },
+  "transformation_types": [
+    "DIRECT_MAPPING",
+    "FORMULA",
+    "LOOKUP",
+    "AGGREGATE",
+    "FILTER",
+    "SORT",
+    "SPLIT",
+    "MERGE"
+  ],
+  "supported_formulas": [
+    "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE",
+    "SUM", "AVG", "COUNT", "MIN", "MAX",
+    "ABS", "ROUND", "MOD"
+  ]
+}

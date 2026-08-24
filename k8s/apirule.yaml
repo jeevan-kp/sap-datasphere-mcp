@@ -1,0 +1,23 @@
+apiVersion: gateway.kyma-project.io/v1alpha1
+kind: APIRule
+metadata:
+  name: sap-datasphere-mcp
+  namespace: datasphere-mcp
+spec:
+  gateway: kyma-gateway.kyma-system.svc.cluster.local
+  host: datasphere-mcp.YOUR_CLUSTER_DOMAIN
+  rules:
+    - path: /mcp
+      accessStrategies:
+        - handler: noop
+      methods:
+        - POST
+        - GET
+    - path: /health
+      accessStrategies:
+        - handler: noop
+      methods:
+        - GET
+  service:
+    name: sap-datasphere-mcp
+    port: 8080

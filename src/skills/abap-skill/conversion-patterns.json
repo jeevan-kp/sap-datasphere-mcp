@@ -1,0 +1,93 @@
+{
+  "version": "2.0.0",
+  "description": "Advanced ABAP to Datasphere Conversion Patterns with BW Query Design Rules",
+  "conversionRules": {
+    "BW_QUERY_TO_ANALYTICAL_MODEL": {
+      "description": "Convert BW Query to Datasphere Analytical Model",
+      "rules": [
+        "BW Query rows → Analytical Model dimensions",
+        "BW Query columns/key figures → Analytical Model measures",
+        "BW Query filters → Analytical Model filters",
+        "BW Query variables → Analytical Model input parameters",
+        "BW Query formulas → Calculated measures",
+        "BW Query restricted key figures → Restricted measures",
+        "BW Query structures → Calculated columns",
+        "BW Query hierarchies → Dimension hierarchies"
+      ],
+      "objectMapping": {
+        "InfoCube": "Analytical Model",
+        "MultiProvider": "View with Unions",
+        "CompositeProvider": "View with Joins",
+        "Open ODS View": "Views",
+        "Virtual InfoProvider": "Views"
+      },
+      "queryDesignRules": {
+        "BWQ001": "Avoid unnecessary characteristics in rows/columns",
+        "BWQ002": "Use appropriate aggregation (SUM, AVG, COUNT, MIN, MAX)",
+        "BWQ003": "Minimize calculated key figures",
+        "BWQ004": "Use structures for complex comparisons",
+        "BWQ005": "Apply zero suppression appropriately",
+        "BWQ006": "Optimize filter conditions",
+        "BWQ007": "Avoid redundant variables",
+        "BWQ008": "Use hierarchy display for drill-down",
+        "BWQ009": "Set correct result position",
+        "BWQ010": "Configure sign presentation",
+        "BWQ011": "Apply cell definitions correctly",
+        "BWQ012": "Use exception handling for alerts"
+      }
+    },
+    "BW_ROUTINE_TO_SQL": {
+      "description": "Convert BW ABAP Routines to SQL/SQLScript",
+      "patterns": {
+        "START_ROUTINE": "Use SQLScript Table Function for complex initialization",
+        "END_ROUTINE": "Use SQLScript Table Function for complex finalization",
+        "FIELD_ROUTINE": "Use CASE statements in SQL View",
+        "FORMULA_ROUTINE": "Use Calculated Columns in View",
+        "LOOKUP_ROUTINE": "Use LEFT JOINs in SQL View",
+        "AGGREGATE_ROUTINE": "Use GROUP BY with aggregate functions",
+        "FILTER_ROUTINE": "Use WHERE clause in View",
+        "SORT_ROUTINE": "Use ORDER BY in View",
+        "CONVERSION_ROUTINE": "Use CASE/DECODE in SQL"
+      },
+      "complexityMapping": {
+        "simple": "SQL View (Query)",
+        "medium": "SQLScript Table Function",
+        "complex": "Transformation Flow",
+        "very_complex": "Python Data Flow"
+      }
+    },
+    "CDS_VIEW_PATTERNS": {
+      "associations": {
+        "single": "LEFT JOIN with cardinality 1",
+        "multiple": "LEFT JOIN with multiple conditions",
+        "exists": "EXISTS subquery"
+      },
+      "annotations": {
+        "@AccessControl.authorizationCheck": "COMMENT or omit",
+        "@EndUserText.label": "COMMENT or omit",
+        "@Semantics.amount.currencyCode": "Use in column definition",
+        "@AbapCatalog.sqlViewName": "Omit"
+      },
+      "complexPatterns": {
+        "caseExpressions": "Use CASE in SQL",
+        "castExpressions": "Use CAST in SQL",
+        "unionViews": "Use UNION ALL in SQL",
+        "aggregations": "Use GROUP BY in SQL"
+      }
+    },
+    "ABAP_SELECT_ADVANCED": {
+      "subqueries": "Convert to CTEs or JOINs",
+      "nestedSelects": "Use WITH clauses",
+      "dynamicWhere": "Use parameterized views",
+      "inlineDeclarations": "Use SQL aliases",
+      "tableExpressions": "Use array functions if supported",
+      "forAllEntries": "Use IN with subquery"
+    }
+  },
+  "samples": {
+    "complex_cds_view": "samples/abap/ZI_SALES_ORDER_ADV.ddl",
+    "complex_report": "samples/abap/Z_SALES_ANALYSIS_ADV.abap",
+    "complex_transformation": "samples/abap/Z_BW_TRANSFORMATION_ADV.abap",
+    "complex_function_module": "samples/abap/Z_FUNCTION_SALES_ANALYSIS.abap"
+  }
+}

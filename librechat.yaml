@@ -1,0 +1,89 @@
+# LibreChat Configuration for SAP Datasphere MCP
+# Place this file in your LibreChat root directory
+
+version: 1.0.0
+
+# Agent Configuration
+agents:
+  - name: "SAP Datasphere Assistant"
+    description: "AI assistant for SAP Datasphere administration and ABAP-to-SQL conversion"
+    model: "gpt-4"
+    temperature: 0.3
+    max_tokens: 4096
+    
+    system_prompt: |
+      You are an SAP Datasphere AI Assistant with expertise in:
+      
+      1. **ABAP to SQL Conversion** - Convert CDS Views, Reports, BW Transformations to Datasphere SQL
+      2. **Datasphere Administration** - Manage spaces, objects, connections, users
+      3. **BW Query Migration** - Convert BW queries to Analytical Models
+      4. **Data Modeling** - Create views, tables, analytical models
+      
+      **Key Behaviors:**
+      - Always explain conversion logic before outputting SQL
+      - Use proper Datasphere naming conventions (UPPER_CASE)
+      - Ask for confirmation before deploying objects
+      - Handle errors gracefully with suggestions
+      
+      **When Converting ABAP Code:**
+      1. Identify file type (CDS View, Report, BW Transformation, Function Module)
+      2. Extract metadata (tables, fields, joins, filters)
+      3. Generate Datasphere-compatible SQL
+      4. Explain the conversion logic
+      
+      **Available Tools:**
+      - analyze_abap_file: Parse ABAP code structure
+      - get_abap_conversion_guide: Get conversion patterns
+      - list_spaces: Browse Datasphere spaces
+      - deploy_view_to_datasphere: Deploy SQL views
+      - validate_sql_view: Validate SQL before deployment
+      
+      Never deploy without explicit user confirmation.
+
+# MCP Server Configuration
+mcpServers:
+  sap-datasphere:
+    # Option 1: Stdio transport (local)
+    command: "node"
+    args:
+      - "C:\\Users\\kpjee\\OneDrive\\Documents\\Default Project\\sap-datasphere-mcp\\dist\\server.js"
+    env:
+      USE_MOCK_DATA: "true"
+      DATASPHERE_BASE_URL: "https://your-tenant.hanacloud.ondemand.com"
+      DATASPHERE_CLIENT_ID: "your-client-id"
+      DATASPHERE_CLIENT_SECRET: "your-client-secret"
+      DATASPHERE_TOKEN_URL: "https://your-tenant.authentication.hanacloud.ondemand.com/oauth/token"
+      MCP_TRANSPORT: "stdio"
+    
+    # Option 2: HTTP transport (uncomment to use)
+    # type: "streamableHttp"
+    # url: "http://localhost:8080/mcp"
+
+# Model Parameters
+parameters:
+  temperature: 0.3
+  top_p: 0.9
+  frequency_penalty: 0.1
+  presence_penalty: 0.1
+
+# Conversation Starters
+conversationStarters:
+  - "Convert this ABAP CDS View to Datasphere SQL"
+  - "List all spaces in my Datasphere tenant"
+  - "Help me migrate a BW query to an Analytical Model"
+  - "What tables are available in my space?"
+  - "Validate this SQL view before deploying"
+
+# Safety Rules
+safety:
+  requireConfirmationBeforeDeploy: true
+  validateSqlBeforeDeploy: true
+  logConversations: false
+  maskSensitiveData: true
+
+# UI Customization
+ui:
+  name: "SAP Datasphere Assistant"
+  description: "AI-powered SAP Datasphere administration and ABAP conversion"
+  icon: "database"
+  theme: "dark"

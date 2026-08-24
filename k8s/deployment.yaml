@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sap-datasphere-mcp
+  namespace: datasphere-mcp
+  labels:
+    app: sap-datasphere-mcp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sap-datasphere-mcp
+  template:
+    metadata:
+      labels:
+        app: sap-datasphere-mcp
+    spec:
+      containers:
+        - name: mcp-server
+          image: YOUR_REGISTRY/sap-datasphere-mcp:latest
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 8100
+              name: abap-parser
+          envFrom:
+            - secretRef:
+                name: datasphere-credentials
+            - configMapRef:
+                name: mcp-config
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      imagePullSecrets:
+        - name: regcred

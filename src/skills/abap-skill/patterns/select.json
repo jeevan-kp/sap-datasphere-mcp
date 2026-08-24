@@ -1,0 +1,21 @@
+{
+  "select_patterns": {
+    "simple": "SELECT\\s+(.+?)\\s+FROM\\s+(\\w+)",
+    "with_join": "SELECT\\s+(.+?)\\s+FROM\\s+(\\w+)\\s+(?:INNER|LEFT|RIGHT)\\s+JOIN\\s+(\\w+)\\s+ON\\s+(.+)",
+    "with_where": "WHERE\\s+(.+?)(?:\\s+GROUP|\\s+ORDER|\\s+UP\\s+TO|$)",
+    "with_limit": "UP\\s+TO\\s+(\\d+)\\s+ROWS",
+    "group_by": "GROUP\\s+BY\\s+(.+?)(?:\\s+HAVING|\\s+ORDER|$)",
+    "order_by": "ORDER\\s+BY\\s+(.+?)(?:\\s+UP\\s+TO|$)"
+  },
+  "supported_clauses": [
+    "SELECT", "FROM", "WHERE", "INNER JOIN", "LEFT JOIN",
+    "RIGHT JOIN", "GROUP BY", "HAVING", "ORDER BY", "UP TO n ROWS"
+  ],
+  "unsupported_features": [
+    "FOR ALL ENTRIES",
+    "NATIVE SQL",
+    "EXEC SQL",
+    "OPEN CURSOR",
+    "FETCH NEXT"
+  ]
+}

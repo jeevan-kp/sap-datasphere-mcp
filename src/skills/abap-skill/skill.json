@@ -1,0 +1,34 @@
+{
+  "name": "abap-skill",
+  "version": "1.0.0",
+  "description": "ABAP to SQL conversion skill for SAP Datasphere MCP Server",
+  "capabilities": [
+    "cds_view_analysis",
+    "cds_view_conversion",
+    "abap_report_conversion",
+    "bw_transformation_conversion",
+    "function_module_conversion"
+  ],
+  "supported_types": [
+    "CDS_VIEW",
+    "ABAP_REPORT",
+    "BW_TRANSFORMATION",
+    "FUNCTION_MODULE"
+  ],
+  "prompts": {
+    "analyze": "prompts/analyze.md",
+    "convert": "prompts/convert.md",
+    "validate": "prompts/validate.md"
+  },
+  "patterns": {
+    "cds": "patterns/cds.json",
+    "select": "patterns/select.json",
+    "bw": "patterns/bw.json",
+    "fm": "patterns/fm.json"
+  },
+  "templates": {
+    "relational_view": "templates/relational_view.sql",
+    "analytical_model": "templates/analytical_model.json",
+    "calculation_view": "templates/calculation_view.sql"
+  }
+}

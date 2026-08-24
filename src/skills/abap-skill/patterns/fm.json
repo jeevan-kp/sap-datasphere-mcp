@@ -1,0 +1,17 @@
+{
+  "fm_patterns": {
+    "function": "FUNCTION\\s+(\\w+)",
+    "end_function": "ENDFUNCTION",
+    "parameter_types": ["USING", "CHANGING", "TABLES", "IMPORTING", "EXPORTING"],
+    "parameter": "(?:USING|CHANGING|TABLES|IMPORTING|EXPORTING)\\s+(\\w+)"
+  },
+  "conversion_strategy": {
+    "description": "Extract SELECT statements from function module and convert to view",
+    "steps": [
+      "Parse function module name and parameters",
+      "Extract all SELECT statements",
+      "Convert first SELECT to CREATE VIEW",
+      "Map parameters to view columns"
+    ]
+  }
+}

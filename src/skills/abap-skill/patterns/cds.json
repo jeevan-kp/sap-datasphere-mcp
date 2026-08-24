@@ -1,0 +1,25 @@
+{
+  "cds_patterns": {
+    "define_view": "DEFINE\\s+(?:VIEW\\s+ENTITY\\s+)?(\\w+)\\s+AS\\s+SELECT\\s+(?:FROM\\s+)?(\\w+)",
+    "join": "(LEFT|RIGHT|INNER|FULL)\\s+(?:OUTER\\s+)?JOIN\\s+(\\w+)\\s+(?:AS\\s+)?(\\w+)?\\s+ON\\s+(.+)",
+    "field": "(?:key\\s+)?(\\w+(?:\\.\\w+)?)\\s+(?:as\\s+)?(\\w+)?",
+    "where": "WHERE\\s+(.+)",
+    "group_by": "GROUP\\s+BY\\s+(.+)",
+    "having": "HAVING\\s+(.+)",
+    "annotation": "@\\w+(?:\\.\\w+)*"
+  },
+  "select_patterns": {
+    "simple": "SELECT\\s+(.+?)\\s+FROM\\s+(\\w+)",
+    "with_join": "SELECT\\s+(.+?)\\s+FROM\\s+(\\w+)\\s+(?:INNER|LEFT|RIGHT)\\s+JOIN\\s+(\\w+)\\s+ON\\s+(.+)",
+    "with_where": "WHERE\\s+(.+?)(?:\\s+GROUP|\\s+ORDER|\\s+UP\\s+TO|$)",
+    "with_limit": "UP\\s+TO\\s+(\\d+)\\s+ROWS"
+  },
+  "bw_patterns": {
+    "transformation": "BEGIN\\s+OF\\s+TRANSFORMATION\\s+(\\w+)",
+    "rule": "(\\w+)\\s*->\\s*(\\w+)(?:\\s*\\((.+?)\\))?"
+  },
+  "fm_patterns": {
+    "function": "FUNCTION\\s+(\\w+)",
+    "parameter": "(?:USING|CHANGING|TABLES|IMPORTING|EXPORTING)\\s+(\\w+)"
+  }
+}

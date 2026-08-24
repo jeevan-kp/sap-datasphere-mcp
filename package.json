@@ -1,0 +1,53 @@
+{
+  "name": "sap-datasphere-mcp",
+  "version": "1.0.0",
+  "description": "MCP Server for SAP Datasphere - Admin, ABAP Conversion, and Data Query",
+  "type": "module",
+  "main": "dist/server.js",
+  "bin": {
+    "sap-datasphere-mcp": "dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "start:http": "node dist/server.js --transport http",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/ --ext .ts",
+    "lint:fix": "eslint src/ --ext .ts --fix",
+    "typecheck": "tsc --noEmit",
+    "docker:build": "docker build -t sap-datasphere-mcp -f docker/Dockerfile .",
+    "docker:run": "docker run --env-file .env -p 8080:8080 sap-datasphere-mcp"
+  },
+  "keywords": [
+    "mcp",
+    "sap",
+    "datasphere",
+    "abap",
+    "ai",
+    "llm"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@sap/datasphere-cli": "^2026.17.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "@vitest/coverage-v8": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

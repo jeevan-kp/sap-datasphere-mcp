@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-config
+  namespace: datasphere-mcp
+data:
+  MCP_TRANSPORT: "http"
+  MCP_HTTP_PORT: "8080"
+  MCP_HTTP_HOST: "0.0.0.0"
+  ABAP_PARSER_URL: "http://localhost:8100"
+  ABAP_PARSER_ENABLED: "true"
+  LOG_LEVEL: "INFO"
+  USE_MOCK_DATA: "false"
+  DATASPHERE_TOOL_PROFILE: "lean"
