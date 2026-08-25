@@ -72,11 +72,11 @@ export class DatasphereClient {
   }
 
   async listSpaces(): Promise<unknown> {
-    return this.get('/api/v1/spaces');
+    return this.get('/api/v1/datasphere/consumption/catalog/spaces');
   }
 
   async getSpaceInfo(spaceId: string): Promise<unknown> {
-    return this.get(`/api/v1/spaces/${encodeURIComponent(spaceId)}`);
+    return this.get(`/api/v1/datasphere/consumption/catalog/spaces('${encodeURIComponent(spaceId)}')`);
   }
 
   async listCatalogAssets(): Promise<unknown> {
@@ -90,7 +90,7 @@ export class DatasphereClient {
   }
 
   async listConnections(): Promise<unknown> {
-    return this.get('/api/v1/connections');
+    return this.get('/api/v1/datasphere/consumption/catalog/connections');
   }
 
   async getMetadata(spaceId: string, assetId: string): Promise<unknown> {
