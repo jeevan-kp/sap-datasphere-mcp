@@ -9,29 +9,32 @@ COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npm run build
 
-FROM python:3.11-slim AS python-builder
-
-WORKDIR /app
-
-COPY python-abap-parser/ ./python-abap-parser/
-RUN pip install --no-cache-dir -e ./python-abap-parser
-
 FROM node:20-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
+    python3-venv \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+# Create Python virtual environment and install ABAP parser
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Upgrade pip and setuptools first (fixes PEP 660 compatibility)
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Copy and install Python ABAP parser (non-editable mode)
+COPY python-abap-parser/ ./python-abap-parser/
+RUN pip install --no-cache-dir ./python-abap-parser
+
+# Copy Node.js build
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
-COPY --from=python-builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=python-builder /usr/local/bin/uvicorn /usr/local/bin/uvicorn
-COPY python-abap-parser/ ./python-abap-parser/
 
 RUN groupadd -r mcpuser && useradd -r -g mcpuser mcpuser
 USER mcpuser
