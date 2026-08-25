@@ -69,7 +69,7 @@ class ABAPLexer:
     PATTERNS = [
         (TokenType.COMMENT, r'(?:".*?"|\*.*)'),
         (TokenType.ANNOTATION, r'@\w+(?:\.\w+)*'),
-        (TokenType.STRING, r"'[^']*'|\"[^\"]*\"'),
+        (TokenType.STRING, "'[^']*'|" + '"[^"]*"'),
         (TokenType.NUMBER, r'\b\d+(?:\.\d+)?\b'),
         (TokenType.KEYWORD, r'\b[A-Z][A-Z0-9_\-]*\b'),
         (TokenType.IDENTIFIER, r'\b[A-Za-z_]\w*\b'),
