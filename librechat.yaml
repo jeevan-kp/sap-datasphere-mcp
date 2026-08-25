@@ -55,9 +55,11 @@ mcpServers:
       DATASPHERE_TOKEN_URL: "https://your-tenant.authentication.hanacloud.ondemand.com/oauth/token"
       MCP_TRANSPORT: "stdio"
     
-    # Option 2: HTTP transport (uncomment to use)
+    # Option 2: HTTP transport (Kyma / Docker - uncomment to use)
     # type: "streamableHttp"
-    # url: "http://localhost:8080/mcp"
+    # url: "https://datasphere-mcp-v2.YOUR_CLUSTER_DOMAIN/mcp"
+    # # For local Docker testing:
+    # # url: "http://localhost:9090/mcp"
 
 # Model Parameters
 parameters:

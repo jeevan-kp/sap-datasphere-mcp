@@ -4,6 +4,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
+      # 9090 external to avoid conflict with local 8080 (MPL Explorer), container still uses 8080 internally
       - "9090:8080"
       - "9100:8100"
     env_file:

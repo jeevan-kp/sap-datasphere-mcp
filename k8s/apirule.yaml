@@ -13,11 +13,14 @@ spec:
       methods:
         - POST
         - GET
+        - DELETE
+        - OPTIONS
     - path: /health
       accessStrategies:
         - handler: noop
       methods:
         - GET
+        - OPTIONS
   service:
     name: sap-datasphere-mcp
     port: 8080
