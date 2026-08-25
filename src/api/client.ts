@@ -85,7 +85,13 @@ export class DatasphereClient {
 
   async getCatalogAsset(spaceId: string, assetId: string): Promise<unknown> {
     return this.get(
-      `/api/v1/datasphere/consumption/catalog/assets/${encodeURIComponent(spaceId)}.${encodeURIComponent(assetId)}`
+      `/api/v1/datasphere/consumption/catalog/spaces('${encodeURIComponent(spaceId)}')/assets('${encodeURIComponent(assetId)}')`
+    );
+  }
+
+  async getSpaceAssets(spaceId: string): Promise<unknown> {
+    return this.get(
+      `/api/v1/datasphere/consumption/catalog/spaces('${encodeURIComponent(spaceId)}')/assets`
     );
   }
 
@@ -94,30 +100,56 @@ export class DatasphereClient {
   }
 
   async getMetadata(spaceId: string, assetId: string): Promise<unknown> {
-    return this.get(
-      `/api/v1/datasphere/consumption/relational/${encodeURIComponent(spaceId)}/${encodeURIComponent(assetId)}/$metadata`
-    );
+    return this.getRelationalMetadata(spaceId, assetId);
   }
 
   async queryRelational(
     spaceId: string,
     assetId: string,
+    entityName: string,
     params: Record<string, string>
   ): Promise<unknown> {
     const query = new URLSearchParams(params).toString();
+    const suffix = query ? `?${query}` : '';
     return this.get(
-      `/api/v1/datasphere/consumption/relational/${encodeURIComponent(spaceId)}/${encodeURIComponent(assetId)}?${query}`
+      `/api/v1/datasphere/consumption/relational/${encodeURIComponent(spaceId)}/${encodeURIComponent(assetId)}/${encodeURIComponent(entityName)}${suffix}`
+    );
+  }
+
+  async listRelationalEntities(spaceId: string, assetId: string): Promise<unknown> {
+    return this.get(
+      `/api/v1/datasphere/consumption/relational/${encodeURIComponent(spaceId)}/${encodeURIComponent(assetId)}`
+    );
+  }
+
+  async getRelationalMetadata(spaceId: string, assetId: string): Promise<unknown> {
+    return this.get(
+      `/api/v1/datasphere/consumption/relational/${encodeURIComponent(spaceId)}/${encodeURIComponent(assetId)}/$metadata`
     );
   }
 
   async queryAnalytical(
     spaceId: string,
     assetId: string,
+    entitySet: string,
     params: Record<string, string>
   ): Promise<unknown> {
     const query = new URLSearchParams(params).toString();
+    const suffix = query ? `?${query}` : '';
     return this.get(
-      `/api/v1/datasphere/consumption/analytical/${encodeURIComponent(spaceId)}/${encodeURIComponent(assetId)}?${query}`
+      `/api/v1/datasphere/consumption/analytical/${encodeURIComponent(spaceId)}/${encodeURIComponent(assetId)}/${encodeURIComponent(entitySet)}${suffix}`
+    );
+  }
+
+  async getAnalyticalServiceDocument(spaceId: string, assetId: string): Promise<unknown> {
+    return this.get(
+      `/api/v1/datasphere/consumption/analytical/${encodeURIComponent(spaceId)}/${encodeURIComponent(assetId)}`
+    );
+  }
+
+  async getAnalyticalMetadata(spaceId: string, assetId: string): Promise<unknown> {
+    return this.get(
+      `/api/v1/datasphere/consumption/analytical/${encodeURIComponent(spaceId)}/${encodeURIComponent(assetId)}/$metadata`
     );
   }
 }
