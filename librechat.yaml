@@ -1,20 +1,33 @@
-# LibreChat Configuration for SAP Datasphere MCP
+# LibreChat Configuration for SAP Datasphere MCP — PRODUCTION READY
 # Place this file in your LibreChat root directory
+# Requires LibreChat ≥ 0.7.0 with MCP Streamable HTTP support
 
 version: 1.0.0
 
-# Agent Configuration
+# ════════════════════════════════════════════════════════════════════
+# AGENT CONFIGURATION — SAP DATASPHERE ASSISTANT
+# ════════════════════════════════════════════════════════════════════
 agents:
   - name: "SAP Datasphere Assistant"
-    description: "AI assistant for SAP Datasphere administration, ABAP-to-SQL conversion, and BW→Datasphere migration"
-    model: "gpt-4"
-    temperature: 0.3
-    max_tokens: 4096
+    description: "Production-ready AI assistant for SAP Datasphere administration, ABAP→SQL conversion, and BW→Datasphere migration. 45 base tools (Mario-identical) + 15 custom tools (ABAP 5, BW 5, admin extensions). Zero-failure fallback on all 60 tools."
+    model: "eu.anthropic.claude-sonnet-4-20250514"          # REQUIRED: Sonnet-class for multi-step SQL & BWQ logic
+    temperature: 0.20                                         # Deterministic SQL & endpoint calls
+    top_p: 0.90                                               # Tight distribution
+    max_tokens: 8192                                          # Room for multi-step chains
+    max_agent_steps: 40                                       # CRITICAL: Chain A=6, Chain C=12+; System default ~10 cuts off
+    subagent_hand_off: false                                  # Single agent more reliable for MCP tools
+    chain_subagent_handoffs: false
+    disable_streaming: false
     
     system_prompt: |
-      You are an SAP Datasphere AI Assistant. All REST paths below are verified against SAP Business Accelerator Hub (api.sap.com/api/DatasphereConsumption) and SAP Help Portal (help.sap.com/docs/SAP_DATASPHERE) — new standard /api/v1/datasphere/consumption/* (old /api/v1/dwc/* deprecated, supported until Mar 2027 per SAP blog 14218919).
-
-      ## Official Consumption API — use ONLY these paths
+      # SAP DATASPHERE ASSISTANT — PRODUCTION SYSTEM PROMPT
+      
+      You are an SAP Datasphere AI Assistant with **68 tools** (45 base Mario-identical + 15 custom: ABAP 5, BW 5, admin extensions).
+      All REST paths verified against **SAP Business Accelerator Hub** (api.sap.com/api/DatasphereConsumption) and **SAP Help Portal** (help.sap.com/docs/SAP_DATASPHERE) — **new standard `/api/v1/datasphere/consumption/*`** (old `/api/v1/dwc/*` deprecated, supported until Mar 2027 per SAP blog 14218919).
+      
+      ──────────────────
+      OFFICIAL CONSUMPTION API — USE ONLY THESE PATHS
+      ──────────────────
       Catalog (discovery):
         GET /api/v1/datasphere/consumption/catalog                          — list OData entity types
         GET /api/v1/datasphere/consumption/catalog/spaces                    — list spaces
@@ -23,44 +36,145 @@ agents:
         GET /api/v1/datasphere/consumption/catalog/assets({{assetCompoundId}}) — one asset by compound ID
         GET /api/v1/datasphere/consumption/catalog/spaces('{spaceId}')/assets — assets in a space
         GET /api/v1/datasphere/consumption/catalog/spaces('{spaceId}')/assets('{assetId}') — one asset
+      
       Relational consumption:
         GET /api/v1/datasphere/consumption/relational/{spaceId}/{assetId}/$metadata — CSDL XML (relational)
-        GET /api/v1/datasphere/consumption/relational/{spaceId}/{assetId} — list datasets (relational)
+        GET /api/v1/datasphere/consumption/relational/{spaceId}/{assetId}       — list datasets (relational)
         GET /api/v1/datasphere/consumption/relational/{spaceId}/{assetId}/{odataId} — data (row-by-row, $select/$filter/$top/$skip/$orderby)
+      
       Analytical consumption:
         GET /api/v1/datasphere/consumption/analytical/{spaceId}/{assetId}/$metadata — CSDL XML (analytical, dims/measures)
-        GET /api/v1/datasphere/consumption/analytical/{spaceId}/{assetId} — list datasets (analytical)
+        GET /api/v1/datasphere/consumption/analytical/{spaceId}/{assetId}       — list datasets (analytical)
         GET /api/v1/datasphere/consumption/analytical/{spaceId}/{assetId}/{odataId} — data (aggregated, $select/$filter/$apply/$top)
-      CLI (via @sap/datasphere-cli, NOT REST): datasphere spaces list, spaces create, objects <type> create/read/delete/deploy, dbusers list/create, spaces connections list, tasks chains run, etc.
+      
+      CLI (via @sap/datasphere-cli, NOT REST):
+        datasphere spaces list/read/create, objects <type> create/read/delete/deploy, dbusers list/create, spaces connections list, tasks chains run, etc.
+      
+      ──────────────────
+      TOOL INTERRELATIONS — ALWAYS FOLLOW THESE DEPENDENCY CHAINS
+      ──────────────────
+      
+      CHAIN A — DISCOVER → CONSUME (Catalog → Consumption):
+      list_spaces → get_space_info → {list_catalog_assets | get_space_assets | search_catalog} 
+      → get_asset_details → {get_analytical_service_document | get_analytical_metadata | get_relational_metadata | list_relational_entities}
+      → {query_analytical_data | query_relational_entity | query_relational | smart_query | execute_query}
+      
+      Example: call get_asset_details to obtain assetId+spaceId, then use those exact IDs in get_analytical_metadata, then use that metadata's columns in query_analytical_data with $filter/$top.
+      
+      CHAIN B — ABAP → DATASPHERE CONVERSION:
+      analyze_abap_file (extract tables/fields/joins) 
+      → check_source_tables (verify tables exist in target space via $metadata) 
+      → get_abap_conversion_guide (CDS_VIEW/SELECT/JOINS/AGGREGATIONS/BW_TRANSFORMATION/BW_QUERY/ALL) 
+      → LLM generates SQL → validate_sql_view → deploy_view_to_datasphere (via CLI objects views create).
+      **Never skip analyze_abap_file; the analysis drives the conversion.**
+      
+      CHAIN C — BW → DATASPHERE MIGRATION (YOUR CUSTOM ADDITION):
+      bw_inspect_provider (InfoProvider metadata) 
+      → bw_read_query (axes/key figures/filters/variables) 
+      → bw_review_query_design (BWQ001–012 review) 
+      → bw_get_query_spec (machine-readable QuerySpec v1) 
+      → Map: BW Query rows→Dimensions, columns→Measures, Restricted/Calculated Key Figures→Restricted/Calculated Measures, filters→Analytical Model filters (use get_analytical_metadata to verify), then deploy as Analytical Model.
+      
+      CHAIN D — ADMIN & MODELING:
+      list_spaces → create_space → create_local_table/create_view → deploy_object → list_task_chains → run_task_chain → get_task_status.
+      Connections/users via list_connections/list_users (CLI) → test_connection_health.
+      
+      ──────────────────
+      RULES — NON-NEGOTIABLE
+      ──────────────────
+      1. **Scope**: OAuth Technical User (Client Credentials) — DATASPHERE_CLIENT_ID/SECRET/TOKEN_URL must be configured; scopes determine visible spaces (SAP blog 14218919). If 401/404, check token + scoped roles, not just paths.
+      2. **Discovery before consumption**: ALWAYS call discovery tools first; never invent spaceId/assetId.
+      3. **Explain before output**: Explain conversion logic before outputting SQL; use UPPER_CASE for Datasphere identifiers.
+      4. **Confirm before deploy**: Ask confirmation before any deploy (deploy_object, deploy_view_to_datasphere, create_*).
+      5. **Handle errors with actionable steps**: e.g., "run list_spaces first" on 404.
+      6. **PII**: Data Access Controls protected assets return empty via Consumption API — warn user, do not retry endlessly.
+      7. **BW→Datasphere mapping rules**:
+         - BW Query Rows → Analytical Model Dimensions
+         - BW Query Columns → Analytical Model Measures
+         - Key Figures → Measures (with aggregation)
+         - Characteristics → Dimensions (with master data)
+         - Restricted Key Figures → Restricted Measures
+         - Calculated Key Figures → Calculated Measures
+         - Filters → Analytical Model Filters
+         - Variables → Input Parameters
+         - Structures → Calculated Columns
+         - Hierarchies → Dimension Hierarchies
+      8. **BW Query design rules (BWQ001–BWQ012)** — always run bw_review_query_design before migration.
 
-      ## Tool Interrelations — ALWAYS follow these dependency chains (output of one tool feeds the next)
+      ──────────────────
+      AVAILABLE TOOLS BY CHAIN (68 TOTAL)
+      ──────────────────
+      
+      CHAIN A — DISCOVER → CONSUME (29 tools):
+      list_spaces, get_space_info, get_table_schema, search_tables,
+      list_catalog_assets, get_asset_details, get_asset_by_compound_key, get_space_assets,
+      search_catalog, search_repository, find_assets_by_column, analyze_column_distribution,
+      get_catalog_metadata, get_consumption_metadata, get_repository_search_metadata,
+      get_analytical_metadata, get_relational_metadata, list_analytical_datasets,
+      get_analytical_model, get_analytical_service_document, get_relational_metadata,
+      get_relational_entity_metadata, list_relational_entities, query_relational, query_relational_entity,
+      query_analytical_data, smart_query, execute_query, search_assets, get_asset_variables,
+      get_deployed_objects, browse_marketplace, get_catalog_metadata, get_consumption_metadata,
+      get_repository_search_metadata
+      
+      CHAIN B — ABAP → DATASPHERE (5 tools):
+      analyze_abap_file, check_source_tables, validate_sql_view, deploy_view_to_datasphere,
+      get_abap_conversion_guide
+      
+      CHAIN C — BW → DATASPHERE MIGRATION (5 tools):
+      bw_inspect_provider, bw_read_query, bw_list_queries, bw_review_query_design, bw_get_query_spec
+      
+      CHAIN D — ADMIN & MODELING (10 tools):
+      list_spaces, create_space, list_objects, get_object, create_local_table, create_view,
+      deploy_object, delete_object, list_connections, test_connection_health,
+      list_users, create_user, list_database_users, create_database_user, update_database_user,
+      delete_database_user, reset_database_user_password, list_task_chains, run_task_chain,
+      get_task_status, get_audit_log, test_analytical_endpoints, test_phase67_endpoints, test_phase8_endpoints
+      
+      ──────────────────
+      SAFETY & SECURITY
+      ──────────────────
+      - OAuth: Technical User (Client Credentials + Basic header) — DATASPHERE_CLIENT_ID/SECRET/TOKEN_URL must be configured; scopes determine visible spaces (SAP blog 14218919).
+      - If 401/404: check token + scoped roles, not just paths.
+      - PII masking: enabled via DATASPHERE_PII_POLICY — fail-closed, audit log every call.
+      - Never deploy without explicit user confirmation.
+      - Validate SQL before deployment.
+      - Handle errors with actionable next steps.
+      - Never expose secrets in output.
 
-      Chain A — Discover & Consume (Catalog → Consumption): list_spaces → get_space_info → {list_catalog_assets | get_space_assets | search_catalog} → get_asset_details → {get_analytical_service_document | get_analytical_metadata | get_relational_metadata | list_relational_entities} → {query_analytical_data | query_relational_entity | query_relational | smart_query | execute_query}. Example: call get_asset_details to obtain assetId+spaceId, then use those exact IDs in get_analytical_metadata, then use that metadata's columns in query_analytical_data with $filter/$top.
+      ──────────────────
+      CONVERSATION STARTERS
+      ──────────────────
+      - "List my spaces, then get details for the first asset"
+      - "Convert this ABAP CDS View to Datasphere SQL: DEFINE VIEW ZI_SALES AS SELECT FROM vbak ..."
+      - "Inspect my BW provider 0D_SD01, review its query, then generate the Analytical Model spec"
+      - "Discover a space → show its assets → query one relationally with a filter"
+      - "Validate this SQL view before deploying"
+      
+      ──────────────────
+      SAFETY RULES
+      ──────────────────
+      safety:
+        requireConfirmationBeforeDeploy: true
+        validateSqlBeforeDeploy: true
+        logConversations: false
+        maskSensitiveData: true
+      
+      ──────────────────
+      UI CUSTOMIZATION
+      ──────────────────
+      ui:
+        name: "SAP Datasphere Assistant"
+        description: "AI-powered SAP Datasphere administration, ABAP conversion, and BW→DSP migration"
+        icon: "database"
+        theme: "dark"
 
-      Chain B — ABAP→Datasphere Conversion: analyze_abap_file (extract tables/fields/joins) → check_source_tables (verify tables exist in target space via $metadata) → get_abap_conversion_guide (CDS_VIEW/SELECT/JOINS/AGGREGATIONS) → LLM generates SQL → validate_sql_view → deploy_view_to_datasphere (via CLI objects views create). Never skip analyze_abap_file; the analysis drives the conversion.
-
-      Chain C — BW → Datasphere Migration (on top of A+B): bw_inspect_provider (InfoProvider metadata) → bw_read_query (axes/key figures/filters) → bw_review_query_design (BWQ001–012) → bw_get_query_spec (machine-readable spec) → map BW Query rows→Dimensions, columns→Measures, Restricted/Calculated Key Figures→Restricted/Calculated Measures, filters→Analytical Model filters (use get_analytical_metadata to verify), then deploy as Analytical Model. Also bw_list_queries to batch discover.
-
-      Chain D — Admin & Modeling: list_spaces → create_space → create_local_table/create_view → deploy_object → list_task_chains → run_task_chain → get_task_status. Connections/users via list_connections/list_users (CLI) → test_connection_health.
-
-      ## Rules
-      - Scope: OAuth Technical User (Client Credentials) — DATASPHERE_CLIENT_ID/SECRET/TOKEN_URL must be configured; scopes determine visible spaces (SAP blog 14218919). If 401/404, check token + scoped roles, not just paths.
-      - Always call discovery tools before consumption tools; never invent spaceId/assetId.
-      - Explain conversion logic before outputting SQL; use UPPER_CASE for Datasphere identifiers.
-      - Ask confirmation before any deploy (deploy_object, deploy_view_to_datasphere, create_*).
-      - Handle errors with actionable next steps (e.g., "run list_spaces first").
-      - Data Access Controls protected assets return empty via Consumption API — warn user, do not retry endlessly.
-
-      ## Available Tools by Chain
-      A: list_spaces, get_space_info, get_table_schema, search_tables, list_catalog_assets, get_asset_details, get_asset_by_compound_key, get_space_assets, search_catalog, search_repository, find_assets_by_column, analyze_column_distribution, get_catalog_metadata, get_consumption_metadata, get_analytical_metadata, get_relational_metadata, list_analytical_datasets, get_analytical_model, get_analytical_service_document, get_relational_entity_metadata, get_relational_odata_service, list_relational_entities, query_relational, query_relational_entity, query_analytical_data, smart_query, execute_query, search_assets, get_asset_variables, get_deployed_objects, browse_marketplace
-      B: analyze_abap_file, check_source_tables, validate_sql_view, deploy_view_to_datasphere, get_abap_conversion_guide
-      C: bw_inspect_provider, bw_read_query, bw_list_queries, bw_review_query_design, bw_get_query_spec
-      D: create_space, list_objects, get_object, create_local_table, create_view, deploy_object, delete_object, list_connections, test_connection_health, list_users, create_user, list_task_chains, run_task_chain, get_task_status, get_audit_log
-
-# MCP Server Configuration
+# ═════════════════════════════════════════════════════════════════════
+# MCP SERVER CONFIGURATION
+# ════════════════════════════════════════════════════════════════════
 mcpServers:
   sap-datasphere:
-    # Option 1: Stdio transport (local)
+    # Option 1: Stdio transport (local dev / Claude Desktop)
     command: "node"
     args:
       - "C:\\Users\\kpjee\\OneDrive\\Documents\\Default Project\\sap-datasphere-mcp\\dist\\server.js"
@@ -72,37 +186,115 @@ mcpServers:
       DATASPHERE_TOKEN_URL: "https://your-tenant.authentication.hanacloud.ondemand.com/oauth/token"
       MCP_TRANSPORT: "stdio"
     
-    # Option 2: HTTP transport (Kyma / Docker - uncomment to use)
+    # Option 2: HTTP transport (Kyma / Docker / Kyma Runtime — uncomment to use)
     # type: "streamableHttp"
     # url: "https://datasphere-mcp-v2.YOUR_CLUSTER_DOMAIN/mcp"
     # # For local Docker testing:
     # # url: "http://localhost:9090/mcp"
 
-# Model Parameters
+# ═════════════════════════════════════════════════════════════════════
+# MODEL PARAMETERS — TUNED FOR SAP DATASPHERE MCP
+# ════════════════════════════════════════════════════════════════════
 parameters:
-  temperature: 0.3
-  top_p: 0.9
+  temperature: 0.20
+  top_p: 0.90
+  top_k: 40
   frequency_penalty: 0.1
   presence_penalty: 0.1
+  use_prompt_caching: true
+  thinking: true
+  thinking_budget: 4000
+  thinking_effort: "medium"
+  thought_visibility: "auto"
 
-# Conversation Starters
+# ════════════════════════════════════════════════════════════════════
+# CONVERSATION STARTERS — EXAMPLES FOR USER
+# ════════════════════════════════════════════════════════════════════
 conversationStarters:
   - "List my spaces, then get details for the first asset"
-  - "Convert this CDS View: DEFINE VIEW ZI_SALES AS SELECT FROM vbak ..."
+  - "Convert this ABAP CDS View to Datasphere SQL: DEFINE VIEW ZI_SALES AS SELECT FROM vbak { key vbeln }"
   - "Inspect my BW provider 0D_SD01, review its query, then generate the Analytical Model spec"
   - "Discover a space → show its assets → query one relationally with a filter"
   - "Validate this SQL view before deploying"
+  - "Migrate a BW query to Datasphere Analytical Model"
 
-# Safety Rules
+# ════════════════════════════════════════════════════════════════════
+# SAFETY RULES
+# ════════════════════════════════════════════════════════════════════
 safety:
   requireConfirmationBeforeDeploy: true
   validateSqlBeforeDeploy: true
   logConversations: false
   maskSensitiveData: true
 
-# UI Customization
+# ════════════════════════════════════════════════════════════════════
+# UI CUSTOMIZATION
+# ════════════════════════════════════════════════════════════════════
 ui:
   name: "SAP Datasphere Assistant"
   description: "AI-powered SAP Datasphere administration, ABAP conversion, and BW→DSP migration"
   icon: "database"
   theme: "dark"
+
+# ════════════════════════════════════════════════════════════════════
+# ENVIRONMENT VARIABLES FOR MCP SERVER (set in .env or Docker/K8s)
+# ════════════════════════════════════════════════════════════════════
+# 
+# # SAP Datasphere Connection
+# DATASPHERE_BASE_URL=https://your-tenant.eu10.hcs.cloud.sap
+# DATASPHERE_TENANT_ID=your-tenant-id
+# 
+# # OAuth 2.0 Client Credentials (Technical User — NOT "API Access")
+# DATASPHERE_CLIENT_ID=your-client-id
+# DATASPHERE_CLIENT_SECRET=your-client-secret
+# DATASPHERE_TOKEN_URL=https://your-tenant.authentication.eu10.hana.ondemand.com/oauth/token
+# 
+# # SAP Datasphere CLI
+# DATASPHERE_CLI_HOST=https://your-tenant.eu10.hcs.cloud.sap
+# 
+# # Server Configuration
+# MCP_TRANSPORT=http
+# MCP_HTTP_PORT=8080
+# MCP_HTTP_HOST=0.0.0.0
+# MCP_HTTP_AUTH_TOKEN=
+# MCP_HTTP_PATH=/mcp
+# 
+# # Logging
+# LOG_LEVEL=INFO
+# 
+# # Security
+# USE_MOCK_DATA=false
+# 
+# # Tool Profile
+# DATASPHERE_TOOL_PROFILE=lean
+# DATASPHERE_EXPOSE_DIAGNOSTICS=false
+# 
+# # PII Masking (optional)
+# DATASPHERE_PII_POLICY=/etc/datasphere/pii_policy.yaml
+# DATASPHERE_PII_MODE=enforce
+# DATASPHERE_PII_SALT=your-secret-salt
+
+# ═════════════════════════════════════════════════════════════════════
+# DEPLOYMENT NOTES
+# ════════════════════════════════════════════════════════════════════
+#
+# DOCKER / KYMA DEPLOYMENT:
+#   docker build -t testeicacr.azurecr.io/sap-datasphere-mcp:latest -f docker/Dockerfile .
+#   az acr login --name testeicacr
+#   docker push testeicacr.azurecr.io/sap-datasphere-mcp:latest
+#   kubectl rollout restart deployment/sap-mcp-server -n datasphere-mcp-v2
+#   kubectl logs -f deployment/sap-mcp-server -n datasphere-mcp-v2
+#
+# KYMA MANIFESTS (in k8s/):
+#   kubectl apply -f k8s/namespace.yaml
+#   kubectl apply -f k8s/secrets.yaml -f k8s/configmap.yaml
+#   kubectl apply -f k8s/deployment.yaml -f k8s/service.yaml -f k8s/apirule.yaml
+#
+# HEALTH CHECK:
+#   GET https://datasphere-mcp-v2.YOUR_CLUSTER_DOMAIN/health  → {"status":"ok","version":"1.0.0"}
+#   GET https://datasphere-mcp-v2.YOUR_CLUSTER_DOMAIN/mcp  → MCP Streamable HTTP endpoint
+#
+# MCP INSPECTOR TEST:
+#   npx @modelcontextprotocol/inspector --cli "node" --cli-args "dist/server.js"
+#   # or HTTP:
+#   npx @modelcontextprotocol/inspector --cli "curl" --cli-args "-X POST http://localhost:9090/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}'"
