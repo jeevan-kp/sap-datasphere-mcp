@@ -80,4 +80,4 @@ jobs:
 
       - name: Verify deployment
         run: |
-          kubectl rollout status deployment/sap-datasphere-mcp -n datasphere-mcp --timeout=300s
+          kubectl rollout status deployment/sap-datasphere-mcp -n datasphere-mcp-v2 --timeout=300s

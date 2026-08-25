@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: sap-datasphere-mcp
-  namespace: datasphere-mcp
+  namespace: datasphere-mcp-v2
 spec:
   selector:
     app: sap-datasphere-mcp

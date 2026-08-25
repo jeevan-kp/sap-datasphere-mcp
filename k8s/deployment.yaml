@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: sap-datasphere-mcp
-  namespace: datasphere-mcp
+  namespace: datasphere-mcp-v2
   labels:
     app: sap-datasphere-mcp
 spec:

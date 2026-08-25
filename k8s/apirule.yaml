@@ -2,10 +2,10 @@ apiVersion: gateway.kyma-project.io/v1alpha1
 kind: APIRule
 metadata:
   name: sap-datasphere-mcp
-  namespace: datasphere-mcp
+  namespace: datasphere-mcp-v2
 spec:
   gateway: kyma-gateway.kyma-system.svc.cluster.local
-  host: datasphere-mcp.YOUR_CLUSTER_DOMAIN
+  host: datasphere-mcp-v2.YOUR_CLUSTER_DOMAIN
   rules:
     - path: /mcp
       accessStrategies:

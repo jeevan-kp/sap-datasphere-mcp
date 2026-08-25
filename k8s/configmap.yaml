@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: mcp-config
-  namespace: datasphere-mcp
+  namespace: datasphere-mcp-v2
 data:
   MCP_TRANSPORT: "http"
   MCP_HTTP_PORT: "8080"
