@@ -31,11 +31,11 @@ export class DatasphereCLI {
   }
 
   async listSpaces(): Promise<CLIResult> {
-    return this.execute('spaces read');
+    return this.execute('spaces list');
   }
 
   async getSpace(spaceId: string): Promise<CLIResult> {
-    return this.execute(`spaces read --name "${spaceId}"`);
+    return this.execute(`spaces read --space "${spaceId}"`);
   }
 
   async createObject(
@@ -91,11 +91,11 @@ export class DatasphereCLI {
   }
 
   async listObjects(objectType: string, spaceId: string): Promise<CLIResult> {
-    return this.execute(`objects ${objectType} read --space "${spaceId}"`);
+    return this.execute(`objects ${objectType} list --space "${spaceId}"`);
   }
 
   async listConnections(): Promise<CLIResult> {
-    return this.execute('spaces connections read');
+    return this.execute('spaces connections list');
   }
 
   async createConnection(
@@ -108,30 +108,65 @@ export class DatasphereCLI {
   }
 
   async listUsers(): Promise<CLIResult> {
-    return this.execute('dbusers list');
+    // Generic list (no space required) — kept for lean profile
+    return this.execute('users list');
   }
 
   async createUser(filePath: string): Promise<CLIResult> {
-    return this.execute(`dbusers create --file-path "${filePath}"`);
+    return this.execute(`users create --file-path "${filePath}"`);
+  }
+
+  // Mario-exact DB user tools (space-aware)
+  async listDatabaseUsers(spaceId: string): Promise<CLIResult> {
+    return this.execute(`dbusers list --space "${spaceId}"`);
+  }
+
+  async createDatabaseUser(spaceId: string, databaseUserId: string, filePath: string): Promise<CLIResult> {
+    return this.execute(`dbusers create --space "${spaceId}" --databaseuser "${databaseUserId}" --file-path "${filePath}"`);
+  }
+
+  async updateDatabaseUser(spaceId: string, databaseUserId: string, filePath: string): Promise<CLIResult> {
+    return this.execute(`dbusers update --space "${spaceId}" --databaseuser "${databaseUserId}" --file-path "${filePath}"`);
+  }
+
+  async deleteDatabaseUser(spaceId: string, databaseUserId: string): Promise<CLIResult> {
+    return this.execute(`dbusers delete --space "${spaceId}" --databaseuser "${databaseUserId}" --force`);
+  }
+
+  async resetDatabaseUserPassword(spaceId: string, databaseUserId: string): Promise<CLIResult> {
+    return this.execute(`dbusers password reset --space "${spaceId}" --databaseuser "${databaseUserId}"`);
   }
 
   async updateUser(filePath: string): Promise<CLIResult> {
-    return this.execute(`dbusers update --file-path "${filePath}"`);
+    return this.execute(`users update --file-path "${filePath}"`);
   }
 
   async deleteUser(name: string): Promise<CLIResult> {
-    return this.execute(`dbusers delete --name "${name}"`);
+    return this.execute(`users delete --users "${name}" --force`);
   }
 
-  async runTaskChain(taskChainId: string): Promise<CLIResult> {
-    return this.execute(`tasks run --name "${taskChainId}"`);
+  async runTaskChain(spaceId: string, objectId: string): Promise<CLIResult> {
+    // Official: datasphere tasks chains run --space <id> --object <technical_name> (p.74)
+    if (spaceId && objectId) {
+      return this.execute(`tasks chains run --space "${spaceId}" --object "${objectId}"`);
+    }
+    // Fallback for legacy single-id calls
+    return this.execute(`tasks chains run --space "${spaceId}" --object "${objectId}"`);
   }
 
-  async getTaskStatus(taskId: string): Promise<CLIResult> {
-    return this.execute(`tasks status --name "${taskId}"`);
+  async getTaskStatus(spaceId: string, logId: string): Promise<CLIResult> {
+    // Official: datasphere tasks logs get --space <id> --log-id <id> (p.76)
+    if (spaceId && logId) {
+      return this.execute(`tasks logs get --space "${spaceId}" --log-id "${logId}"`);
+    }
+    return this.execute(`tasks logs get --space "${spaceId}" --log-id "${logId}"`);
+  }
+
+  async getTaskHistory(spaceId: string, objectId: string): Promise<CLIResult> {
+    return this.execute(`tasks logs list --space "${spaceId}" --object "${objectId}"`);
   }
 
   async getTaskLogs(taskId: string): Promise<CLIResult> {
-    return this.execute(`tasks logs --name "${taskId}"`);
+    return this.execute(`tasks logs get --log-id "${taskId}"`);
   }
 }

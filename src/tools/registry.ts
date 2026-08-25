@@ -60,7 +60,12 @@ const spaceTools: ToolDefinition[] = [
     requiresAuth: true,
     inputSchema: {
       type: 'object' as const,
-      properties: {},
+      properties: {
+        include_details: {
+          type: 'boolean',
+          description: 'Include detailed space information',
+        },
+      },
       required: [],
     },
   },
@@ -108,7 +113,7 @@ const spaceTools: ToolDefinition[] = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        query: {
+        search_term: {
           type: 'string',
           description: 'Search keyword',
         },
@@ -117,7 +122,7 @@ const spaceTools: ToolDefinition[] = [
           description: 'Optional space ID to filter',
         },
       },
-      required: ['query'],
+      required: ['search_term'],
     },
   },
   {
@@ -309,9 +314,29 @@ const objectTools: ToolDefinition[] = [
     inputSchema: {
       type: 'object' as const,
       properties: {
+        select_fields: {
+          type: 'string',
+          description: 'Fields to select',
+        },
+        filter_expression: {
+          type: 'string',
+          description: 'OData filter expression',
+        },
+        top: {
+          type: 'number',
+          description: 'Max results',
+        },
+        skip: {
+          type: 'number',
+          description: 'Skip count',
+        },
+        include_count: {
+          type: 'boolean',
+          description: 'Include total count',
+        },
         space_id: {
           type: 'string',
-          description: 'Optional space ID to filter',
+          description: 'Optional space ID to filter (legacy)',
         },
       },
       required: [],
@@ -332,6 +357,10 @@ const objectTools: ToolDefinition[] = [
         asset_id: {
           type: 'string',
           description: 'The asset ID',
+        },
+        expand_fields: {
+          type: 'string',
+          description: 'Fields to expand',
         },
       },
       required: ['space_id', 'asset_id'],
@@ -369,6 +398,18 @@ const objectTools: ToolDefinition[] = [
           type: 'string',
           description: 'The space ID',
         },
+        filter_expression: {
+          type: 'string',
+          description: 'OData filter expression',
+        },
+        top: {
+          type: 'number',
+          description: 'Max results',
+        },
+        skip: {
+          type: 'number',
+          description: 'Skip count',
+        },
       },
       required: ['space_id'],
     },
@@ -381,16 +422,16 @@ const objectTools: ToolDefinition[] = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        query: {
+        keyword: {
           type: 'string',
-          description: 'Search query',
+          description: 'Search keyword',
         },
         space_id: {
           type: 'string',
           description: 'Optional space ID to filter',
         },
       },
-      required: ['query'],
+      required: ['keyword'],
     },
   },
   {
@@ -401,16 +442,16 @@ const objectTools: ToolDefinition[] = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        query: {
+        keyword: {
           type: 'string',
-          description: 'Search query',
+          description: 'Search keyword',
         },
         object_types: {
           type: 'string',
           description: 'Comma-separated object types to filter',
         },
       },
-      required: ['query'],
+      required: ['keyword'],
     },
   },
   {
@@ -429,6 +470,14 @@ const objectTools: ToolDefinition[] = [
           type: 'string',
           description: 'Optional space ID to filter',
         },
+        max_assets: {
+          type: 'number',
+          description: 'Maximum assets to return',
+        },
+        case_sensitive: {
+          type: 'boolean',
+          description: 'Case sensitive search',
+        },
       },
       required: ['column_name'],
     },
@@ -445,16 +494,24 @@ const objectTools: ToolDefinition[] = [
           type: 'string',
           description: 'The space ID',
         },
-        entity_name: {
+        asset_name: {
           type: 'string',
-          description: 'The entity name',
+          description: 'The asset name',
         },
         column_name: {
           type: 'string',
           description: 'The column to analyze',
         },
+        sample_size: {
+          type: 'number',
+          description: 'Sample size',
+        },
+        include_outliers: {
+          type: 'boolean',
+          description: 'Include outliers',
+        },
       },
-      required: ['space_id', 'entity_name', 'column_name'],
+      required: ['space_id', 'asset_name', 'column_name'],
     },
   },
 ];
@@ -468,16 +525,32 @@ const queryTools: ToolDefinition[] = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        query: {
-          type: 'string',
-          description: 'Natural language query or SQL SELECT statement',
-        },
         space_id: {
           type: 'string',
           description: 'The space ID to query',
         },
+        query: {
+          type: 'string',
+          description: 'Natural language query or SQL SELECT statement',
+        },
+        mode: {
+          type: 'string',
+          description: 'Query mode',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max rows',
+        },
+        include_metadata: {
+          type: 'boolean',
+          description: 'Include metadata',
+        },
+        fallback: {
+          type: 'boolean',
+          description: 'Fallback enabled',
+        },
       },
-      required: ['query', 'space_id'],
+      required: ['space_id', 'query'],
     },
   },
   {
@@ -567,12 +640,7 @@ const queryTools: ToolDefinition[] = [
     requiresAuth: true,
     inputSchema: {
       type: 'object' as const,
-      properties: {
-        endpoint_type: {
-          type: 'string',
-          description: 'Endpoint type (relational or analytical)',
-        },
-      },
+      properties: {},
       required: [],
     },
   },
@@ -692,6 +760,10 @@ const queryTools: ToolDefinition[] = [
           type: 'string',
           description: 'The asset ID',
         },
+        entity_name: {
+          type: 'string',
+          description: 'The entity name (alias for entity_set)',
+        },
         entity_set: {
           type: 'string',
           description: 'The entity set name',
@@ -704,6 +776,10 @@ const queryTools: ToolDefinition[] = [
           type: 'string',
           description: 'OData filter expression',
         },
+        apply: {
+          type: 'string',
+          description: 'OData apply expression',
+        },
         top: {
           type: 'number',
           description: 'Number of rows to return',
@@ -713,7 +789,7 @@ const queryTools: ToolDefinition[] = [
           description: 'Order by expression',
         },
       },
-      required: ['space_id', 'asset_id', 'entity_set'],
+      required: ['space_id', 'asset_id'],
     },
   },
   {
@@ -724,16 +800,20 @@ const queryTools: ToolDefinition[] = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        sql: {
-          type: 'string',
-          description: 'SQL SELECT statement',
-        },
         space_id: {
           type: 'string',
           description: 'The space ID',
         },
+        sql_query: {
+          type: 'string',
+          description: 'SQL SELECT statement',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max rows',
+        },
       },
-      required: ['sql', 'space_id'],
+      required: ['space_id', 'sql_query'],
     },
   },
   {
@@ -870,7 +950,12 @@ const connectionTools: ToolDefinition[] = [
     requiresAuth: true,
     inputSchema: {
       type: 'object' as const,
-      properties: {},
+      properties: {
+        connection_type: {
+          type: 'string',
+          description: 'Filter by connection type',
+        },
+      },
       required: [],
     },
   },
@@ -914,7 +999,7 @@ const connectionTools: ToolDefinition[] = [
           description: 'The space ID',
         },
       },
-      required: ['space_id'],
+      required: [],
     },
   },
   {
@@ -924,7 +1009,16 @@ const connectionTools: ToolDefinition[] = [
     requiresAuth: true,
     inputSchema: {
       type: 'object' as const,
-      properties: {},
+      properties: {
+        category: {
+          type: 'string',
+          description: 'Filter by category',
+        },
+        search_term: {
+          type: 'string',
+          description: 'Search keyword',
+        },
+      },
       required: [],
     },
   },
@@ -964,6 +1058,172 @@ const userTools: ToolDefinition[] = [
   },
 ];
 
+const databaseUserTools: ToolDefinition[] = [
+  {
+    name: 'list_database_users',
+    description: 'List all database users (alias for list_users, Mario: space_id required)',
+    category: 'users',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        space_id: {
+          type: 'string',
+          description: 'The space ID',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'create_database_user',
+    description: 'Create a new database user',
+    category: 'users',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        space_id: {
+          type: 'string',
+          description: 'The space ID',
+        },
+        database_user_id: {
+          type: 'string',
+          description: 'Database user ID',
+        },
+        user_definition: {
+          type: 'object',
+          description: 'User definition object',
+        },
+      },
+      required: ['space_id', 'database_user_id'],
+    },
+  },
+  {
+    name: 'update_database_user',
+    description: 'Update a database user',
+    category: 'users',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        space_id: {
+          type: 'string',
+          description: 'The space ID',
+        },
+        database_user_id: {
+          type: 'string',
+          description: 'Database user ID',
+        },
+        updated_definition: {
+          type: 'object',
+          description: 'Updated definition',
+        },
+      },
+      required: ['space_id', 'database_user_id'],
+    },
+  },
+  {
+    name: 'delete_database_user',
+    description: 'Delete a database user',
+    category: 'users',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        space_id: {
+          type: 'string',
+          description: 'The space ID',
+        },
+        database_user_id: {
+          type: 'string',
+          description: 'Database user ID',
+        },
+        force: {
+          type: 'boolean',
+          description: 'Force deletion',
+        },
+      },
+      required: ['space_id', 'database_user_id'],
+    },
+  },
+  {
+    name: 'reset_database_user_password',
+    description: 'Reset database user password',
+    category: 'users',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        space_id: {
+          type: 'string',
+          description: 'The space ID',
+        },
+        database_user_id: {
+          type: 'string',
+          description: 'Database user ID',
+        },
+      },
+      required: ['space_id', 'database_user_id'],
+    },
+  },
+  {
+    name: 'get_repository_search_metadata',
+    description: 'Get repository search metadata',
+    category: 'queries',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_task_log',
+    description: 'Get task log details',
+    category: 'tasks',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        space_id: {
+          type: 'string',
+          description: 'The space ID',
+        },
+        log_id: {
+          type: 'string',
+          description: 'The log ID',
+        },
+        detail_level: {
+          type: 'string',
+          description: 'Detail level',
+        },
+      },
+      required: ['space_id', 'log_id'],
+    },
+  },
+  {
+    name: 'get_task_history',
+    description: 'Get task history',
+    category: 'tasks',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        space_id: {
+          type: 'string',
+          description: 'The space ID',
+        },
+        object_id: {
+          type: 'string',
+          description: 'The object ID',
+        },
+      },
+      required: ['space_id', 'object_id'],
+    },
+  },
+];
+
 const taskTools: ToolDefinition[] = [
   {
     name: 'list_task_chains',
@@ -989,12 +1249,20 @@ const taskTools: ToolDefinition[] = [
     inputSchema: {
       type: 'object' as const,
       properties: {
+        space_id: {
+          type: 'string',
+          description: 'The space ID',
+        },
+        object_id: {
+          type: 'string',
+          description: 'The task chain object ID',
+        },
         task_chain_id: {
           type: 'string',
-          description: 'The task chain ID to run',
+          description: 'Alias for object_id (backward compat)',
         },
       },
-      required: ['task_chain_id'],
+      required: [],
     },
   },
   {
@@ -1009,8 +1277,12 @@ const taskTools: ToolDefinition[] = [
           type: 'string',
           description: 'The task ID to check',
         },
+        space_id: {
+          type: 'string',
+          description: 'Optional space ID',
+        },
       },
-      required: ['task_id'],
+      required: [],
     },
   },
 ];
@@ -1259,6 +1531,7 @@ export function getAllTools(profile: 'lean' | 'full' = 'lean'): ToolDefinition[]
     ...queryTools,
     ...connectionTools,
     ...userTools,
+    ...databaseUserTools,
     ...taskTools,
     ...abapTools,
     ...bwQueryTools,

@@ -308,12 +308,16 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
       case 'run_task_chain': {
-        const result = await cli!.runTaskChain(args.task_chain_id as string);
+        const spaceId = args.space_id as string;
+        const objectId = args.object_id as string || args.task_chain_id as string;
+        const result = await cli!.runTaskChain(spaceId, objectId);
         return textResult(result.success ? `Task chain started` : `Failed: ${result.error}`);
       }
 
       case 'get_task_status': {
-        const result = await cli!.getTaskStatus(args.task_id as string);
+        const spaceId = args.space_id as string;
+        const logId = args.log_id as string || args.task_id as string;
+        const result = await cli!.getTaskStatus(spaceId, logId);
         return textResult(result.output || 'Task status unknown');
       }
 
@@ -608,7 +612,298 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         return textResult('Audit log: [integration with Datasphere audit API]');
       }
 
-      default: {
+
+      case 'get_available_scopes': {
+        // OAuth scopes are embedded in the token, parse from token if available
+        const tokenInfo = await client!.get('/api/v1/datasphere/consumption/catalog/spaces');
+        return textResult('Available scopes: determined by Technical User scoped roles. Check OAuth client configuration in App Integration.');
+      }
+
+      case 'get_table_schema': {
+        // Get table schema via relational metadata
+        const spaceId = args.space_id as string;
+        const tableName = args.table_name as string;
+        const result = await client!.getRelationalMetadata(spaceId, tableName);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'search_tables': {
+        const spaceId = args.space_id as string;
+        const searchTerm = args.search_term as string;
+        const assets = await client!.listCatalogAssets();
+        // Filter client-side since catalog search is not always available
+        const allAssets = JSON.parse(JSON.stringify(assets)).value || [];
+        const filtered = allAssets.filter((a: any) => 
+          a.name?.toLowerCase().includes((args.search_term as string).toLowerCase()) ||
+          a.label?.toLowerCase().includes((args.search_term as string).toLowerCase())
+        );
+        return textResult(JSON.stringify({ value: filtered }, null, 2));
+      }
+
+      case 'list_catalog_assets': {
+        const result = await client!.listCatalogAssets();
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_asset_details': {
+        const result = await client!.getCatalogAsset(args.space_id as string, args.asset_id as string);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_asset_by_compound_key': {
+        const result = await client!.getAssetByCompoundId(args.asset_id as string);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_space_assets': {
+        const result = await client!.getSpaceAssets(args.space_id as string);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'search_catalog': {
+        const keyword = args.keyword as string;
+        const result = await client!.searchCatalog(keyword);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'search_repository': {
+        const keyword = args.keyword as string;
+        const assets = await client!.listCatalogAssets();
+        const allAssets = JSON.parse(JSON.stringify(assets)).value || [];
+        const filtered = allAssets.filter((a: any) => 
+          a.name?.toLowerCase().includes(keyword.toLowerCase()) ||
+          a.label?.toLowerCase().includes(keyword.toLowerCase())
+        );
+        return textResult(JSON.stringify({ value: filtered }, null, 2));
+      }
+
+      case 'find_assets_by_column': {
+        const columnName = args.column_name as string;
+        const spaceId = args.space_id as string;
+        const allAssets = await client!.listCatalogAssets();
+        const allAssetsList = JSON.parse(JSON.stringify(allAssets)).value || [];
+        // For each asset, check if it has the column via metadata
+        const matching: any[] = [];
+        for (const asset of allAssetsList) {
+          try {
+            const meta = await client!.getRelationalMetadata(asset.spaceId, asset.name);
+            const cols = JSON.parse(JSON.stringify(meta)).columns || [];
+            if (cols.some((c: any) => c.name?.toLowerCase() === (args.column_name as string).toLowerCase())) {
+              matching.push(asset);
+            }
+          } catch {
+            // skip
+          }
+        }
+        return textResult(JSON.stringify({ value: matching }, null, 2));
+      }
+
+      case 'analyze_column_distribution': {
+        const spaceId = args.space_id as string;
+        const assetName = args.asset_name as string;
+        const columnName = args.column_name as string;
+        const params: Record<string, string> = { '$top': '1000' };
+        const data = await client!.queryRelational(spaceId, assetName, assetName, { '$top': '1000' });
+        const rows = (JSON.parse(JSON.stringify(data)).value || []) as any[];
+        const values = rows.map((r: any) => r[columnName]).filter((v: any) => v != null);
+        const unique = new Set(values);
+        const stats = {
+          total: values.length,
+          distinct: unique.size,
+          nulls: ((args.sample_size as number) || 1000) - values.length,
+          sample: Array.from(unique).slice(0, 20)
+        };
+        return textResult(JSON.stringify(stats, null, 2));
+      }
+
+      case 'get_catalog_metadata': {
+        const result = await client!.getCatalogMetadata();
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_consumption_metadata': {
+        const result = await client!.getConsumptionMetadata();
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_repository_search_metadata': {
+        const result = await client!.get('/api/v1/datasphere/consumption/catalog/$metadata');
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_analytical_metadata': {
+        const result = await client!.getAnalyticalMetadata(args.space_id as string, args.asset_id as string);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_relational_metadata': {
+        const result = await client!.getRelationalMetadata(args.space_id as string, args.asset_id as string);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'list_analytical_datasets': {
+        const result = await client!.getAnalyticalServiceDocument(args.space_id as string, args.asset_id as string);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_analytical_model': {
+        const result = await client!.getAnalyticalServiceDocument(args.space_id as string, args.asset_id as string);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_analytical_service_document': {
+        const result = await client!.getAnalyticalServiceDocument(args.space_id as string, args.asset_id as string);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'query_analytical_data': {
+        const params: Record<string, string> = {};
+        if (args.select) params.$select = args.select as string;
+        if (args.filter) params.$filter = args.filter as string;
+        if (args.apply) params.$apply = args.apply as string;
+        if (args.top) params.$top = String(args.top);
+        if (args.orderby) params.$orderby = args.orderby as string;
+        const entityName = (args.entity_name as string) || (args.entity_set as string);
+        const result = await client!.queryAnalytical(
+          args.space_id as string,
+          args.asset_id as string,
+          entityName,
+          params
+        );
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'execute_query': {
+        const assetId = (args.asset_id as string) || '';
+        const entityName = (args.entity_name as string) || '';
+        const result = await client!.queryRelational(
+          args.space_id as string,
+          assetId,
+          entityName,
+          { '$filter': (args.filter as string) || '', '$top': String((args.limit as number) || 1000) }
+        );
+        // Note: execute_query uses SQL→OData conversion; for now using relational query as fallback
+        return textResult(JSON.stringify({
+          note: 'Full SQL→OData conversion requires CLI; using relational query as fallback',
+          sql_query: args.sql_query,
+          result: JSON.parse(JSON.stringify(await client!.queryRelational(
+            args.space_id as string,
+            args.asset_id as string || '',
+            args.entity_name as string || '',
+            { '$top': String((args.limit as number) || 1000) }
+          ))).value || []
+        }, null, 2));
+      }
+
+      case 'list_relational_entities': {
+        const result = await client!.listRelationalEntities(args.space_id as string, args.asset_id as string);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_relational_entity_metadata': {
+        const result = await client!.getRelationalMetadata(args.space_id as string, args.asset_id as string);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'query_relational_entity': {
+        const params: Record<string, string> = {};
+        if (args.select) params.$select = args.select as string;
+        if (args.filter) params.$filter = args.filter as string;
+        if (args.top) params.$top = String(args.top);
+        if (args.skip) params.$skip = String(args.skip);
+        if (args.orderby) params.$orderby = args.orderby as string;
+        const result = await client!.queryRelational(
+          args.space_id as string,
+          args.asset_id as string,
+          args.entity_name as string,
+          params
+        );
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_relational_odata_service': {
+        const result = await client!.listRelationalEntities(args.space_id as string, args.asset_id as string);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_asset_variables': {
+        const result = await client!.getAnalyticalMetadata(args.space_id as string, args.asset_id as string);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'browse_marketplace': {
+        const result = await client!.get('/api/v1/datasphere/marketplace/packages');
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_available_scopes': {
+        return textResult('Available scopes: Determined by Technical User scoped roles in App Integration. Check your OAuth client configuration.');
+      }
+
+      case 'get_deployed_objects': {
+        const assets = await client!.listCatalogAssets();
+        const all = JSON.parse(JSON.stringify(assets)).value || [];
+        const deployed = all.filter((a: any) => a.deploymentStatus === 'Deployed' || a.status === 'Deployed');
+        return textResult(JSON.stringify({ value: deployed }, null, 2));
+      }
+
+      case 'list_database_users': {
+        const result = await cli!.listDatabaseUsers(args.space_id as string);
+        return textResult(result.output || 'No database users found');
+      }
+
+      case 'create_database_user': {
+        const jsonDef = JSON.stringify({
+          databaseUserId: args.database_user_id,
+          userDefinition: args.user_definition,
+        });
+        const fs = await import('fs');
+        const path = await import('path');
+        const tmpFile = path.join('/tmp', `${args.database_user_id}_dbuser.json`);
+        fs.writeFileSync(tmpFile, jsonDef);
+        const result = await cli!.createDatabaseUser(args.space_id as string, args.database_user_id as string, tmpFile);
+        fs.unlinkSync(tmpFile);
+        return textResult(result.success ? `Database user created: ${args.database_user_id}` : `Failed: ${result.error}`);
+      }
+
+      case 'update_database_user': {
+        const jsonDef = JSON.stringify(args.updated_definition);
+        const fs = await import('fs');
+        const path = await import('path');
+        const tmpFile = path.join('/tmp', `${args.database_user_id}_update.json`);
+        fs.writeFileSync(tmpFile, jsonDef);
+        const result = await cli!.updateDatabaseUser(args.space_id as string, args.database_user_id as string, tmpFile);
+        fs.unlinkSync(tmpFile);
+        return textResult(result.success ? `Database user updated: ${args.database_user_id}` : `Failed: ${result.error}`);
+      }
+
+      case 'delete_database_user': {
+        const result = await cli!.deleteDatabaseUser(args.space_id as string, args.database_user_id as string);
+        return textResult(result.success ? `Database user deleted: ${args.database_user_id}` : `Failed: ${result.error}`);
+      }
+
+      case 'reset_database_user_password': {
+        const result = await cli!.resetDatabaseUserPassword(args.space_id as string, args.database_user_id as string);
+        return textResult(result.success ? `Password reset for: ${args.database_user_id}` : `Failed: ${result.error}`);
+      }
+
+      case 'get_repository_search_metadata': {
+        const result = await client!.get('/api/v1/datasphere/consumption/catalog/$metadata');
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'get_task_log': {
+        const result = await cli!.getTaskStatus(args.space_id as string, args.log_id as string);
+        return textResult(result.output || 'Task log not found');
+      }
+
+      case 'get_task_history': {
+        const result = await cli!.getTaskHistory(args.space_id as string, args.object_id as string);
+        return textResult(result.output || 'Task history not found');
+      }
+
+
+            default: {
         // Zero-failure fallback: tools without dedicated real impl return structured mock
         // instead of "Unknown tool" error — ensures all 60 lean tools pass even before full port
         console.error(`[MCP] Tool ${name} has no dedicated real handler yet — returning mock fallback`);

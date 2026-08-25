@@ -160,4 +160,24 @@ export class DatasphereClient {
       `/api/v1/datasphere/consumption/analytical/${encodeURIComponent(spaceId)}/${encodeURIComponent(assetId)}/$metadata`
     );
   }
+
+  async getCatalogMetadata(): Promise<unknown> {
+    return this.get('/api/v1/datasphere/consumption/catalog/$metadata');
+  }
+
+  async getConsumptionMetadata(): Promise<unknown> {
+    return this.get('/api/v1/datasphere/consumption/$metadata');
+  }
+
+  async searchCatalog(keyword: string): Promise<unknown> {
+    return this.get(`/api/v1/datasphere/consumption/catalog/assets?search=${encodeURIComponent(keyword)}`);
+  }
+
+  async getTaskLog(spaceId: string, logId: string): Promise<unknown> {
+    return this.get(`/api/v1/datasphere/tasks/logs/${encodeURIComponent(spaceId)}/${encodeURIComponent(logId)}`);
+  }
+
+  async getTaskHistory(spaceId: string, objectId: string): Promise<unknown> {
+    return this.get(`/api/v1/datasphere/tasks/logs/${encodeURIComponent(spaceId)}/objects/${encodeURIComponent(objectId)}`);
+  }
 }
