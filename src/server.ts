@@ -665,6 +665,29 @@ async function main() {
     // Map to hold active transports by session ID
     const transports = new Map<string, StreamableHTTPServerTransport>();
 
+    // Detailed request logging middleware
+    app.use((req, res, next) => {
+      const start = Date.now();
+      const sessionId = req.headers['mcp-session-id'] || '-';
+      console.error(`[REQ] ${req.method} ${req.originalUrl} | session=${sessionId} | accept=${req.headers['accept'] || '-'} | content-type=${req.headers['content-type'] || '-'}`);
+
+      if (req.method === 'POST' && req.body && Object.keys(req.body).length > 0) {
+        try {
+          const b = req.body as Record<string, unknown>;
+          console.error(`[REQ BODY] method=${b.method} id=${b.id} params=${JSON.stringify(b.params).slice(0, 300)}`);
+        } catch {
+          console.error('[REQ BODY] <unserializable>');
+        }
+      }
+
+      res.on('finish', () => {
+        const dur = Date.now() - start;
+        console.error(`[RES] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${dur}ms)`);
+      });
+
+      next();
+    });
+
     app.get('/health', (_req, res) => {
       res.json({ status: 'ok', version: '1.0.0' });
     });
@@ -684,17 +707,20 @@ async function main() {
       const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
       if (sessionId && transports.has(sessionId)) {
+        console.error(`[MCP] Existing session: ${sessionId.slice(0, 8)}...`);
         const transport = transports.get(sessionId)!;
         await transport.handleRequest(req, res, req.body);
         return;
       }
 
+      console.error(`[MCP] New session request (no/unknown session id)`);
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
       });
 
       transport.onclose = () => {
         if (transport.sessionId) {
+          console.error(`[MCP] Session closed: ${transport.sessionId.slice(0, 8)}...`);
           transports.delete(transport.sessionId);
         }
       };
@@ -706,6 +732,7 @@ async function main() {
 
       if (transport.sessionId) {
         transports.set(transport.sessionId, transport);
+        console.error(`[MCP] Session created: ${transport.sessionId.slice(0, 8)}... | active sessions: ${transports.size}`);
       }
     });
 
@@ -715,9 +742,11 @@ async function main() {
 
       const sessionId = req.headers['mcp-session-id'] as string | undefined;
       if (!sessionId || !transports.has(sessionId)) {
+        console.error(`[MCP GET] Invalid session: ${sessionId || 'none'}`);
         res.status(400).json({ error: 'Missing or invalid Mcp-Session-Id header' });
         return;
       }
+      console.error(`[MCP GET] SSE stream for session: ${sessionId.slice(0, 8)}...`);
       const transport = transports.get(sessionId)!;
       await transport.handleRequest(req, res);
     });
@@ -727,12 +756,26 @@ async function main() {
 
       const sessionId = req.headers['mcp-session-id'] as string | undefined;
       if (!sessionId || !transports.has(sessionId)) {
+        console.error(`[MCP DELETE] Invalid session: ${sessionId || 'none'}`);
         res.status(400).json({ error: 'Missing or invalid Mcp-Session-Id header' });
         return;
       }
+      console.error(`[MCP DELETE] Closing session: ${sessionId.slice(0, 8)}...`);
       const transport = transports.get(sessionId)!;
       await transport.handleRequest(req, res, req.body);
       transports.delete(sessionId);
+    });
+
+    // Catch-all 404 logger - must be registered AFTER all routes
+    app.use((req, res) => {
+      console.error(`[404] ${req.method} ${req.originalUrl} | session=${req.headers['mcp-session-id'] || '-'} | No route matched!`);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.status(404).json({
+        error: 'Not found',
+        method: req.method,
+        path: req.originalUrl,
+        hint: 'Available endpoints: GET /health, POST /mcp, GET /mcp, DELETE /mcp',
+      });
     });
 
     app.listen(config.server.httpPort, config.server.httpHost, () => {
