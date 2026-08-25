@@ -79,8 +79,16 @@ export class DatasphereClient {
     return this.get(`/api/v1/datasphere/consumption/catalog/spaces('${encodeURIComponent(spaceId)}')`);
   }
 
+  async getCatalogRoot(): Promise<unknown> {
+    return this.get('/api/v1/datasphere/consumption/catalog');
+  }
+
   async listCatalogAssets(): Promise<unknown> {
     return this.get('/api/v1/datasphere/consumption/catalog/assets');
+  }
+
+  async getAssetByCompoundId(assetCompoundId: string): Promise<unknown> {
+    return this.get(`/api/v1/datasphere/consumption/catalog/assets(${encodeURIComponent(assetCompoundId)})`);
   }
 
   async getCatalogAsset(spaceId: string, assetId: string): Promise<unknown> {
