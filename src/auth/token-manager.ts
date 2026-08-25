@@ -23,16 +23,17 @@ export class TokenManager {
   }
 
   private async acquireToken(): Promise<string> {
+    // SAP official: Authorization: Basic base64(client_id:client_secret) per CLI docs p10 + Mario's connector
+    const basic = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
     const body = new URLSearchParams({
       grant_type: 'client_credentials',
-      client_id: this.clientId,
-      client_secret: this.clientSecret,
     });
 
     const response = await fetch(this.tokenUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${basic}`,
       },
       body: body.toString(),
     });
