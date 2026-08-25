@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { loadConfig } from './config.js';
 import { DatasphereClient } from './api/client.js';
 import { DatasphereCLI } from './cli/datasphere-cli.js';
@@ -611,45 +613,48 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
 }
 
 async function main() {
-  const server = new McpServer({
-    name: 'sap-datasphere-mcp',
-    version: '1.0.0',
-  });
+  function createServer(): McpServer {
+    const server = new McpServer({
+      name: 'sap-datasphere-mcp',
+      version: '1.0.0',
+    });
 
-  const tools = getAllTools(config.server.toolProfile);
+    const tools = getAllTools(config.server.toolProfile);
 
-  for (const tool of tools) {
-    // Convert JSON Schema properties to Zod schema
-    const schemaObj: Record<string, z.ZodTypeAny> = {};
-    const props = tool.inputSchema.properties as Record<string, any>;
-    for (const [key, prop] of Object.entries(props || {})) {
-      if (prop.type === 'string') {
-        schemaObj[key] = z.string().optional().describe(prop.description || '');
-      } else if (prop.type === 'number') {
-        schemaObj[key] = z.number().optional().describe(prop.description || '');
-      } else if (prop.type === 'boolean') {
-        schemaObj[key] = z.boolean().optional().describe(prop.description || '');
-      } else {
-        schemaObj[key] = z.any().optional();
+    for (const tool of tools) {
+      const schemaObj: Record<string, z.ZodTypeAny> = {};
+      const props = tool.inputSchema.properties as Record<string, any>;
+      for (const [key, prop] of Object.entries(props || {})) {
+        if (prop.type === 'string') {
+          schemaObj[key] = z.string().optional().describe(prop.description || '');
+        } else if (prop.type === 'number') {
+          schemaObj[key] = z.number().optional().describe(prop.description || '');
+        } else if (prop.type === 'boolean') {
+          schemaObj[key] = z.boolean().optional().describe(prop.description || '');
+        } else {
+          schemaObj[key] = z.any().optional();
+        }
       }
+      const zodSchema = z.object(schemaObj);
+
+      server.tool(
+        tool.name,
+        tool.description || '',
+        zodSchema.shape,
+        async (args: Record<string, unknown>) => {
+          const result = await handleTool(tool.name, args);
+          return {
+            content: result.content.map(c => ({
+              type: 'text' as const,
+              text: c.text,
+            })),
+            isError: result.isError,
+          };
+        }
+      );
     }
-    const zodSchema = z.object(schemaObj);
 
-    server.tool(
-      tool.name,
-      tool.description || '',
-      zodSchema.shape,
-      async (args: Record<string, unknown>) => {
-        const result = await handleTool(tool.name, args);
-        return {
-          content: result.content.map(c => ({
-            type: 'text' as const,
-            text: c.text,
-          })),
-          isError: result.isError,
-        };
-      }
-    );
+    return server;
   }
 
   if (config.server.transport === 'http') {
@@ -657,50 +662,77 @@ async function main() {
     const app = express();
     app.use(express.json());
 
+    // Map to hold active transports by session ID
+    const transports = new Map<string, StreamableHTTPServerTransport>();
+
     app.get('/health', (_req, res) => {
       res.json({ status: 'ok', version: '1.0.0' });
     });
 
+    app.options('/mcp', (_req, res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Mcp-Session-Id');
+      res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id');
+      res.status(204).end();
+    });
+
     app.post('/mcp', async (req, res) => {
-      const { method, params, id } = req.body;
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id');
 
-      if (method === 'initialize') {
-        res.json({
-          jsonrpc: '2.0',
-          id,
-          result: {
-            protocolVersion: '2025-03-26',
-            capabilities: { tools: {} },
-            serverInfo: { name: 'sap-datasphere-mcp', version: '1.0.0' },
-          },
-        });
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
+      if (sessionId && transports.has(sessionId)) {
+        const transport = transports.get(sessionId)!;
+        await transport.handleRequest(req, res, req.body);
         return;
       }
 
-      if (method === 'tools/list') {
-        res.json({
-          jsonrpc: '2.0',
-          id,
-          result: { tools },
-        });
-        return;
-      }
-
-      if (method === 'tools/call') {
-        const result = await handleTool(params.name, params.arguments || {});
-        res.json({
-          jsonrpc: '2.0',
-          id,
-          result,
-        });
-        return;
-      }
-
-      res.json({
-        jsonrpc: '2.0',
-        id,
-        error: { code: -32601, message: `Method not found: ${method}` },
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
       });
+
+      transport.onclose = () => {
+        if (transport.sessionId) {
+          transports.delete(transport.sessionId);
+        }
+      };
+
+      const sessionServer = createServer();
+      await sessionServer.connect(transport);
+
+      await transport.handleRequest(req, res, req.body);
+
+      if (transport.sessionId) {
+        transports.set(transport.sessionId, transport);
+      }
+    });
+
+    app.get('/mcp', async (req, res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id');
+
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      if (!sessionId || !transports.has(sessionId)) {
+        res.status(400).json({ error: 'Missing or invalid Mcp-Session-Id header' });
+        return;
+      }
+      const transport = transports.get(sessionId)!;
+      await transport.handleRequest(req, res);
+    });
+
+    app.delete('/mcp', async (req, res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      if (!sessionId || !transports.has(sessionId)) {
+        res.status(400).json({ error: 'Missing or invalid Mcp-Session-Id header' });
+        return;
+      }
+      const transport = transports.get(sessionId)!;
+      await transport.handleRequest(req, res, req.body);
+      transports.delete(sessionId);
     });
 
     app.listen(config.server.httpPort, config.server.httpHost, () => {
@@ -708,6 +740,7 @@ async function main() {
     });
   } else {
     const transport = new StdioServerTransport();
+    const server = createServer();
     await server.connect(transport);
     console.error('SAP Datasphere MCP Server running on stdio');
   }
