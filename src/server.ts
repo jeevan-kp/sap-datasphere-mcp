@@ -903,7 +903,7 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
 
-            default: {
+      default: {
         // Zero-failure fallback: tools without dedicated real impl return structured mock
         // instead of "Unknown tool" error — ensures all 60 lean tools pass even before full port
         console.error(`[MCP] Tool ${name} has no dedicated real handler yet — returning mock fallback`);
