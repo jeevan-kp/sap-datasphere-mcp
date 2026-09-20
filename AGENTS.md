@@ -15,13 +15,13 @@
 
 | Metric | Value |
 |--------|-------|
-| **Total Tools** | 76+ (including 4 new Space Administrator & Health Diagnosis tools) |
-| **Tests** | 31 passing (`npm test` / `vitest run` across 7 test suites) |
+| **Total Tools** | 77+ (including Space Administrator Suite & Volume Optimization Advisor) |
+| **Tests** | 32 passing (`npm test` / `vitest run` across 7 test suites) |
 | **Build** | ✅ TypeScript compiles cleanly (`tsc --noEmit` & `npm run build`) |
 | **Mock Data** | ✅ Fully functional (`USE_MOCK_DATA=true`) |
 | **Live Verification** | ✅ Verified live on space `FTDWH_100_INT` (Catalog, Relational, Analytics, CLI CSN deploy) |
 | **HANA Cloud Open SQL** | ✅ Integrated with Schema Isolation Guard (`DSP_OPEN_SCHEME`) |
-| **Space Administration** | ✅ `SpaceAuditor` module for health scoring, fault diagnosis, and diff-based documentation generation |
+| **Space Administration** | ✅ `SpaceAuditor` module for health scoring, fault diagnosis, diff documentation, and volume optimization |
 | **Kyma Readiness** | ✅ Manifests configured for namespace `datasphere-mcp-v2` |
 
 

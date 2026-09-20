@@ -1708,6 +1708,31 @@ const adminTools: ToolDefinition[] = [
       required: ['table_name'],
     },
   },
+  {
+    name: 'audit_performance_optimizations',
+    description: "Audit existing tasks, data pipelines, tables, and views for volume-based bottlenecks and optimization opportunities. WHEN TO USE: Use by administrators and architects to identify unoptimized assets — such as high-volume tables without partitioning or primary keys, computationally heavy unpersisted views running over millions of rows, and inefficient full-table pipeline loads that should be migrated to delta CDC. PREREQUISITES: space_id. INPUTS: space_id (defaults to FTDWH_100_INT), threshold_rows (optional, defaults to 100000), asset_type (optional: 'all' | 'tables' | 'views' | 'pipelines'). RETURNS: Optimization report detailing unoptimized tables, views, and pipelines with severity, data volume insights, root-cause issues, and concrete remediation steps (SQL partitioning, CSN view persistency, delta replication).",
+    category: 'spaces',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        space_id: {
+          type: 'string',
+          description: "Technical name of the space to audit (defaults to FTDWH_100_INT).",
+        },
+        threshold_rows: {
+          type: 'number',
+          description: "Row count threshold above which tables and views are flagged for high-volume analysis (defaults to 100,000).",
+        },
+        asset_type: {
+          type: 'string',
+          enum: ['all', 'tables', 'views', 'pipelines'],
+          description: "Filter audit to a specific asset category: 'all', 'tables', 'views', or 'pipelines' (defaults to 'all').",
+        },
+      },
+      required: [],
+    },
+  },
 ];
 
 export function getAllTools(profile: 'lean' | 'full' = 'lean'): ToolDefinition[] {

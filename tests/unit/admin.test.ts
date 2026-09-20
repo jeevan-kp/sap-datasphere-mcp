@@ -74,4 +74,43 @@ describe('SpaceAuditor - Space Administrator Suite', () => {
     expect(diff.csnPatchPreview).toBeDefined();
     expect((diff.csnPatchPreview as any).definitions.VBAP_SALES_ITEMS).toBeDefined();
   });
+
+  it('audits performance optimizations and flags unpartitioned tables, unpersisted views, and full-load pipelines', async () => {
+    const report = await SpaceAuditor.auditPerformanceOptimizations({
+      spaceId: 'FTDWH_100_INT',
+      thresholdRows: 100000,
+    });
+
+    expect(report).toBeDefined();
+    expect(report.spaceId).toBe('FTDWH_100_INT');
+    expect(report.summary.totalAssetsAudited).toBeGreaterThan(0);
+    expect(report.summary.criticalBottlenecks).toBeGreaterThan(0);
+    expect(report.summary.estimatedMemorySavingsMb).toBeGreaterThan(0);
+    expect(report.summary.overallOptimizationScore).toBeLessThan(100);
+
+    // 1. Table Volume Insight: Check for unpartitioned ACDOCA (>5M rows)
+    const acdoca = report.tables.find(t => t.tableName.includes('ACDOCA'));
+    expect(acdoca).toBeDefined();
+    expect(acdoca?.optimizationPriority).toBe('HIGH');
+    expect(acdoca?.rowCountEstimate).toBeGreaterThanOrEqual(5000000);
+    expect(acdoca?.actionSqlOrCsn).toContain('PARTITION BY RANGE');
+    expect(acdoca?.insights[0]).toContain('Full table scans on unpartitioned');
+
+    // 2. View Persistency Insight: Check for multi-million row unpersisted view
+    const view = report.views.find(v => v.viewName === 'V_FIN_REVENUE_CUBE');
+    expect(view).toBeDefined();
+    expect(view?.optimizationPriority).toBe('HIGH');
+    expect(view?.underlyingVolumeEstimate).toBeGreaterThan(10000000);
+    expect(view?.actionSqlOrCsn).toContain('@Datasphere.persistency');
+
+    // 3. Pipeline Inefficiency Insight: Check for recurring full load on heavy dataset
+    const pipeline = report.pipelines.find(p => p.pipelineName === 'TC_DAILY_ERP_REPLICATION');
+    expect(pipeline).toBeDefined();
+    expect(pipeline?.optimizationPriority).toBe('HIGH');
+    expect(pipeline?.replicationMode).toBe('FULL_LOAD');
+    expect(pipeline?.recommendations[0]).toContain('INITIAL_AND_DELTA');
+
+    // 4. Recommendation Summary
+    expect(report.recommendationSummary.length).toBeGreaterThanOrEqual(3);
+  });
 });

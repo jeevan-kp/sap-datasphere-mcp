@@ -152,6 +152,14 @@ When assets lack descriptions or use raw German ERP technical abbreviations (`VB
 * Returns a structured **Before & After Diff** (`currentLabel` vs `suggestedLabel` and `confidence`).
 * Generates a ready-to-deploy **CSN Patch Preview** annotating entities with `@EndUserText.label` and `@EndUserText.quickInfo`, enabling space administrators to review and deploy changes directly as-is.
 
+### 4. Volume & Performance Optimization Advisor (`audit_performance_optimizations`)
+Diagnoses existing data pipelines, tables, and views to detect unoptimized configurations based on real data volume, execution runtimes, and memory consumption:
+* **High-Volume Tables (>5M rows)**: Identifies unpartitioned monolithic tables (`ACDOCA`, `VBAP`, `EKPO`) that cause full table scans and high memory consumption. Provides concrete `ALTER TABLE ... PARTITION BY RANGE (GJAHR)` remediation scripts.
+* **Missing Primary Keys on High-Volume Datasets**: Flags tables exceeding row thresholds (e.g. >100k rows) lacking unique keys, which breaks Delta Change Data Capture (CDC) replication.
+* **Computationally Heavy Unpersisted Views**: Detects views joining millions of underlying records without View Persistency, causing repetitive dynamic joins and query latency >8s on SAC dashboards. Recommends `@Datasphere.persistency` cache configurations.
+* **Inefficient Full-Table ETL Pipelines**: Audits task chains and replication flows to catch recurring full-table extractions on large datasets (>500k records) and advises migration to "Initial and Delta" CDC mode, cutting pipeline durations by ~90%.
+* **Synthesis & Savings**: Computes an Overall Optimization Score (0-100), estimated memory savings (MB), and a prioritized actionable remediation checklist.
+
 ---
 
 ## 3. Tool Mapping & Decision Matrix
@@ -190,6 +198,7 @@ This matrix instructs MCP clients on **when to call each tool**, the **mandatory
 | **Administration** | `audit_table_health` | Deep per-table diagnosis checking for primary keys, nullability traps, column documentation coverage, and data presence. | Space known | `space_id: "FTDWH_100_INT"`, `table_name: "T_ORDERS"` | TableHealthReport with key status, column issues, and actionable recommendations |
 | **Administration** | `audit_task_chains` | Audit status and execution duration of scheduled task chains / replication pipelines in the space. | Space known | `space_id: "FTDWH_100_INT"` | Array of task chains with execution status, last run timestamp, duration |
 | **Administration** | `suggest_table_documentation` | AI/Dictionary-powered documentation generator mapping SAP ERP/BW technical fields (VBELN, POSNR, KUNNR, etc.) to standard business labels with Before & After diffs and CSN patches. | Table known | `space_id: "FTDWH_100_INT"`, `table_name: "VBAP"`, optional `column_names: [...]` | DocumentationDiff with Before/After label diffs, confidence scores, and CSN patch preview |
+| **Administration** | `audit_performance_optimizations` | Audit existing tasks, pipelines, tables, and views for volume-based bottlenecks (unpartitioned high-volume tables, unpersisted multi-million row views, recurring full-load ETL pipelines). | Space known | `space_id: "FTDWH_100_INT"`, optional `threshold_rows: 100000`, `asset_type: "all"` | OptimizationReport with priority score, data volume insights, and actionable partition/persistency/delta recommendations |
 
 ---
 

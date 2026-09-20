@@ -1117,6 +1117,22 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         return textResult(JSON.stringify(diff, null, 2));
       }
 
+      case 'audit_performance_optimizations': {
+        const spaceId = (args.space_id as string) || 'FTDWH_100_INT';
+        const thresholdRows = (args.threshold_rows as number) || 100000;
+        const assetType = (args.asset_type as 'all' | 'tables' | 'views' | 'pipelines') || 'all';
+
+        const report = await SpaceAuditor.auditPerformanceOptimizations({
+          spaceId,
+          thresholdRows,
+          assetType,
+          client: client || undefined,
+          hanaClient: hanaClient || undefined,
+          cli: cli || undefined,
+        });
+        return textResult(JSON.stringify(report, null, 2));
+      }
+
       default: {
         // Zero-failure fallback: tools without dedicated real impl return structured mock
         // instead of "Unknown tool" error — ensures all 60 lean tools pass even before full port
