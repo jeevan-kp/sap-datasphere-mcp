@@ -78,22 +78,41 @@ export class CDSConverter {
   }
 
   private generateJSON(view: ParsedCDSView, targetName: string, spaceId: string): Record<string, unknown> {
+    const elements: Record<string, unknown> = {};
+
+    for (const f of view.fields) {
+      const colName = (f.alias || f.name).toUpperCase();
+      let cdsType = 'cds.String';
+      const dt = (f.dataType || '').toUpperCase();
+      if (dt.includes('INT')) cdsType = 'cds.Integer';
+      else if (dt.includes('DEC') || dt.includes('CURR') || dt.includes('QUAN')) cdsType = 'cds.Decimal';
+      else if (dt.includes('DAT')) cdsType = 'cds.Date';
+      else if (dt.includes('TIM')) cdsType = 'cds.Time';
+      else if (dt.includes('BOOL')) cdsType = 'cds.Boolean';
+
+      elements[colName] = {
+        type: cdsType,
+        ...(f.isKey ? { key: true, notNull: true } : {}),
+        '@EndUserText.label': f.alias || f.name,
+      };
+    }
+
     return {
-      technicalName: targetName,
-      description: `Converted from CDS view: ${view.name}`,
-      spaceId,
-      columns: view.fields.map(f => ({
-        name: f.alias || f.name,
-        technicalName: f.name.toUpperCase(),
-        dataType: f.dataType || 'NVARCHAR',
-        isKey: f.isKey,
-      })),
-      sqlDefinition: this.generateSQL(view, targetName),
+      definitions: {
+        [targetName]: {
+          kind: 'entity',
+          '@EndUserText.label': `Converted from CDS View: ${view.name}`,
+          '@ObjectModel.modelingPattern': { '#': 'FACT' },
+          '@ObjectModel.supportedCapabilities': [{ '#': 'FACT' }, { '#': 'DATA_STRUCTURE' }],
+          '@Analytics.dataCategory': { '#': 'CUBE' },
+          elements,
+        },
+      },
     };
   }
 
   private generateCLICommand(targetName: string, spaceId: string): string {
-    return `datasphere objects views create --space "${spaceId}" --technical-name "${targetName}" --file-path "${targetName}.json"`;
+    return `datasphere objects views create -y "${spaceId}" -F "${targetName}.json"`;
   }
 
   private checkWarnings(view: ParsedCDSView): string[] {

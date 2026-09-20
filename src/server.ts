@@ -1,4 +1,6 @@
-#!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -6,9 +8,12 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { loadConfig } from './config.js';
 import { DatasphereClient } from './api/client.js';
 import { DatasphereCLI } from './cli/datasphere-cli.js';
+import { TokenManager } from './auth/token-manager.js';
+import { HanaClient } from './hana/client.js';
 import { getAllTools } from './tools/registry.js';
 import { ABAPParser } from './abap/parser.js';
 import type { ToolResult } from './types/index.js';
+import { sanitizeForLLM, maskSensitiveObject } from './security/sanitizer.js';
 import { z } from 'zod';
 import {
   MOCK_SPACES,
@@ -24,17 +29,40 @@ import {
 const config = loadConfig();
 const useMockData = config.server.useMockData;
 const client = useMockData ? null : new DatasphereClient(config.datasphere);
-const cli = useMockData ? null : new DatasphereCLI(config.datasphere.cliHost);
+const tokenManager = useMockData ? null : new TokenManager(
+  config.datasphere.tokenUrl,
+  config.datasphere.clientId,
+  config.datasphere.clientSecret
+);
+const cli = useMockData ? null : new DatasphereCLI(config.datasphere.cliHost, tokenManager || undefined);
+const hanaClient = (useMockData || !config.hana) ? null : new HanaClient(config.hana);
 
 // Built-in ABAP Parser - extracts metadata for LLM to use
 const abapParser = new ABAPParser();
 
+function writeTempJson(filenamePrefix: string, data: unknown): string {
+  const safePrefix = filenamePrefix.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const tmpFile = path.join(os.tmpdir(), `${safePrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.json`);
+  fs.writeFileSync(tmpFile, typeof data === 'string' ? data : JSON.stringify(data, null, 2));
+  return tmpFile;
+}
+
+function safeUnlink(filePath: string): void {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch {
+    // Ignore cleanup error
+  }
+}
+
 function textResult(text: string): ToolResult {
-  return { content: [{ type: 'text' as const, text }] };
+  return { content: [{ type: 'text' as const, text: sanitizeForLLM(text) }] };
 }
 
 function errorResult(message: string): ToolResult {
-  return { content: [{ type: 'text' as const, text: `Error: ${message}` }], isError: true };
+  return { content: [{ type: 'text' as const, text: `Error: ${sanitizeForLLM(message)}` }], isError: true };
 }
 
 function handleMockTool(name: string, args: Record<string, unknown>): ToolResult {
@@ -177,36 +205,72 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
       case 'create_local_table': {
-        const jsonDef = JSON.stringify({
-          technicalName: args.table_name,
-          columns: args.columns,
-        });
-        const fs = await import('fs');
-        const path = await import('path');
-        const tmpFile = path.join('/tmp', `${args.table_name}.json`);
-        fs.writeFileSync(tmpFile, jsonDef);
-        const result = await cli!.createObject(
-          'local-tables', args.space_id as string, args.table_name as string, tmpFile
-        );
-        fs.unlinkSync(tmpFile);
-        return textResult(result.success ? `Table created: ${args.table_name}` : `Failed: ${result.error}`);
+        const tableName = args.table_name as string;
+        const columns = (args.columns || []) as Array<{ name: string; type?: string; length?: number; isKey?: boolean }>;
+        
+        const elements: Record<string, any> = {};
+        if (Array.isArray(columns) && columns.length > 0) {
+          for (const col of columns) {
+            elements[col.name] = {
+              '@EndUserText.label': col.name,
+              type: col.type?.startsWith('cds.') ? col.type : (col.type === 'INT' || col.type === 'INTEGER' ? 'cds.Integer' : 'cds.String'),
+              key: Boolean(col.isKey),
+              ...(col.isKey ? { notNull: true } : {}),
+              ...(col.length ? { length: col.length } : (!col.type || col.type === 'cds.String' || col.type === 'STRING' ? { length: 50 } : {})),
+            };
+          }
+        } else {
+          // Default minimal schema if no columns provided
+          elements['ID'] = {
+            '@EndUserText.label': 'ID',
+            type: 'cds.String',
+            key: true,
+            notNull: true,
+            length: 10,
+          };
+        }
+
+        const csnPayload = {
+          definitions: {
+            [tableName]: {
+              kind: 'entity',
+              '@EndUserText.label': tableName,
+              '@ObjectModel.modelingPattern': { '#': 'DATA_STRUCTURE' },
+              '@ObjectModel.supportedCapabilities': [{ '#': 'DATA_STRUCTURE' }],
+              elements,
+            },
+          },
+        };
+
+        const tmpFile = writeTempJson(String(tableName), csnPayload);
+        try {
+          const result = await cli!.createObject(
+            'local-tables', args.space_id as string, tableName, tmpFile
+          );
+          if (result.success) {
+            return textResult(`Table created and deployed: ${tableName} in space ${args.space_id}`);
+          }
+          return textResult(`Failed to create table ${tableName}: ${result.error || result.output}`);
+        } finally {
+          safeUnlink(tmpFile);
+        }
       }
 
       case 'create_view': {
-        const jsonDef = JSON.stringify({
+        const jsonDef = {
           technicalName: args.view_name,
           sqlDefinition: args.sql_definition,
           description: args.description || '',
-        });
-        const fs = await import('fs');
-        const path = await import('path');
-        const tmpFile = path.join('/tmp', `${args.view_name}.json`);
-        fs.writeFileSync(tmpFile, jsonDef);
-        const result = await cli!.createObject(
-          'views', args.space_id as string, args.view_name as string, tmpFile
-        );
-        fs.unlinkSync(tmpFile);
-        return textResult(result.success ? `View created: ${args.view_name}` : `Failed: ${result.error}`);
+        };
+        const tmpFile = writeTempJson(String(args.view_name), jsonDef);
+        try {
+          const result = await cli!.createObject(
+            'views', args.space_id as string, args.view_name as string, tmpFile
+          );
+          return textResult(result.success ? `View created: ${args.view_name}` : `Failed: ${result.error}`);
+        } finally {
+          safeUnlink(tmpFile);
+        }
       }
 
       case 'deploy_object': {
@@ -275,7 +339,7 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
       case 'list_connections': {
-        const result = await cli!.listConnections();
+        const result = await cli!.listConnections(args.space_id as string | undefined);
         return textResult(result.output || 'No connections found');
       }
 
@@ -289,17 +353,17 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
       case 'create_user': {
-        const jsonDef = JSON.stringify({
+        const jsonDef = {
           name: args.username,
           password: args.password,
-        });
-        const fs = await import('fs');
-        const path = await import('path');
-        const tmpFile = path.join('/tmp', `${args.username}_user.json`);
-        fs.writeFileSync(tmpFile, jsonDef);
-        const result = await cli!.createUser(tmpFile);
-        fs.unlinkSync(tmpFile);
-        return textResult(result.success ? `User created: ${args.username}` : `Failed: ${result.error}`);
+        };
+        const tmpFile = writeTempJson(String(args.username), jsonDef);
+        try {
+          const result = await cli!.createUser(tmpFile);
+          return textResult(result.success ? `User created: ${args.username}` : `Failed: ${result.error}`);
+        } finally {
+          safeUnlink(tmpFile);
+        }
       }
 
       case 'list_task_chains': {
@@ -399,20 +463,19 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         const sqlDef = args.sql_definition as string;
         const description = args.description as string || '';
 
-        // Create the view definition
-        const jsonDef = JSON.stringify({
+        const jsonDef = {
           technicalName: viewName,
           sqlDefinition: sqlDef,
           description,
-        });
+        };
 
-        const fs = await import('fs');
-        const path = await import('path');
-        const tmpFile = path.join('/tmp', `${viewName}.json`);
-        fs.writeFileSync(tmpFile, jsonDef);
-
-        const createResult = await cli!.createObject('views', spaceId, viewName, tmpFile);
-        fs.unlinkSync(tmpFile);
+        const tmpFile = writeTempJson(viewName, jsonDef);
+        let createResult;
+        try {
+          createResult = await cli!.createObject('views', spaceId, viewName, tmpFile);
+        } finally {
+          safeUnlink(tmpFile);
+        }
 
         if (!createResult.success) {
           return errorResult(`Failed to create view: ${createResult.error}`);
@@ -620,22 +683,40 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
       case 'get_table_schema': {
-        // Get table schema via relational metadata
         const spaceId = args.space_id as string;
         const tableName = args.table_name as string;
-        const result = await client!.getRelationalMetadata(spaceId, tableName);
-        return textResult(JSON.stringify(result, null, 2));
+        try {
+          const result = await client!.getRelationalMetadata(spaceId, tableName);
+          return textResult(typeof result === 'string' ? result : JSON.stringify(result, null, 2));
+        } catch {
+          // Fallback: inspect entity schema via sample record
+          try {
+            const entities = await client!.listRelationalEntities(spaceId, tableName) as { value?: Array<{ name: string }> };
+            const entityName = entities?.value?.[0]?.name || tableName;
+            const sample = await client!.queryRelational(spaceId, tableName, entityName, { '$top': '1' }) as { value?: Record<string, unknown>[] };
+            if (sample?.value && sample.value.length > 0) {
+              const columns = Object.keys(sample.value[0]).map(col => ({
+                name: col,
+                type: typeof sample.value![0][col],
+                sampleValue: sample.value![0][col],
+              }));
+              return textResult(JSON.stringify({ table: tableName, space: spaceId, columns }, null, 2));
+            }
+          } catch {
+            // ignore
+          }
+          return textResult(`Schema for table ${tableName} in space ${spaceId} is accessible via query_relational.`);
+        }
       }
 
       case 'search_tables': {
         const spaceId = args.space_id as string;
-        const searchTerm = args.search_term as string;
+        const searchTerm = (args.search_term as string || '').toLowerCase();
         const assets = await client!.listCatalogAssets();
-        // Filter client-side since catalog search is not always available
         const allAssets = JSON.parse(JSON.stringify(assets)).value || [];
         const filtered = allAssets.filter((a: any) => 
-          a.name?.toLowerCase().includes((args.search_term as string).toLowerCase()) ||
-          a.label?.toLowerCase().includes((args.search_term as string).toLowerCase())
+          (!spaceId || a.spaceName === spaceId || a.spaceId === spaceId) &&
+          (a.name?.toLowerCase().includes(searchTerm) || a.label?.toLowerCase().includes(searchTerm))
         );
         return textResult(JSON.stringify({ value: filtered }, null, 2));
       }
@@ -667,33 +748,36 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
       case 'search_repository': {
-        const keyword = args.keyword as string;
+        const keyword = (args.keyword as string || '').toLowerCase();
         const assets = await client!.listCatalogAssets();
         const allAssets = JSON.parse(JSON.stringify(assets)).value || [];
         const filtered = allAssets.filter((a: any) => 
-          a.name?.toLowerCase().includes(keyword.toLowerCase()) ||
-          a.label?.toLowerCase().includes(keyword.toLowerCase())
+          a.name?.toLowerCase().includes(keyword) ||
+          a.label?.toLowerCase().includes(keyword)
         );
         return textResult(JSON.stringify({ value: filtered }, null, 2));
       }
 
       case 'find_assets_by_column': {
-        const columnName = args.column_name as string;
+        const columnName = (args.column_name as string || '').toLowerCase();
         const spaceId = args.space_id as string;
         const allAssets = await client!.listCatalogAssets();
         const allAssetsList = JSON.parse(JSON.stringify(allAssets)).value || [];
-        // For each asset, check if it has the column via metadata
         const matching: any[] = [];
         for (const asset of allAssetsList) {
+          const actualSpace = asset.spaceName || asset.spaceId;
+          if (spaceId && actualSpace !== spaceId) continue;
           try {
-            const meta = await client!.getRelationalMetadata(asset.spaceId, asset.name);
-            const cols = JSON.parse(JSON.stringify(meta)).columns || [];
-            if (cols.some((c: any) => c.name?.toLowerCase() === (args.column_name as string).toLowerCase())) {
+            const meta = await client!.listRelationalEntities(actualSpace, asset.name) as { value?: Array<{ name: string }> };
+            const entityName = meta?.value?.[0]?.name || asset.name;
+            const sample = await client!.queryRelational(actualSpace, asset.name, entityName, { '$top': '1' }) as { value?: Record<string, unknown>[] };
+            if (sample?.value?.[0] && Object.keys(sample.value[0]).some(k => k.toLowerCase() === columnName)) {
               matching.push(asset);
             }
           } catch {
             // skip
           }
+          if (matching.length >= 10) break;
         }
         return textResult(JSON.stringify({ value: matching }, null, 2));
       }
@@ -702,8 +786,16 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         const spaceId = args.space_id as string;
         const assetName = args.asset_name as string;
         const columnName = args.column_name as string;
-        const params: Record<string, string> = { '$top': '1000' };
-        const data = await client!.queryRelational(spaceId, assetName, assetName, { '$top': '1000' });
+        let entityName = assetName;
+        try {
+          const entities = await client!.listRelationalEntities(spaceId, assetName) as { value?: Array<{ name: string }> };
+          if (entities?.value?.[0]?.name) {
+            entityName = entities.value[0].name;
+          }
+        } catch {
+          // fallback to assetName
+        }
+        const data = await client!.queryRelational(spaceId, assetName, entityName, { '$top': '1000' });
         const rows = (JSON.parse(JSON.stringify(data)).value || []) as any[];
         const values = rows.map((r: any) => r[columnName]).filter((v: any) => v != null);
         const unique = new Set(values);
@@ -774,6 +866,13 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
       case 'execute_query': {
+        const sqlQuery = args.sql_query as string;
+        if (hanaClient && sqlQuery) {
+          const hanaRes = await hanaClient.executeQuery(sqlQuery);
+          if (hanaRes.success) {
+            return textResult(JSON.stringify(hanaRes, null, 2));
+          }
+        }
         const assetId = (args.asset_id as string) || '';
         const entityName = (args.entity_name as string) || '';
         const result = await client!.queryRelational(
@@ -853,28 +952,27 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
       case 'create_database_user': {
-        const jsonDef = JSON.stringify({
+        const jsonDef = {
           databaseUserId: args.database_user_id,
           userDefinition: args.user_definition,
-        });
-        const fs = await import('fs');
-        const path = await import('path');
-        const tmpFile = path.join('/tmp', `${args.database_user_id}_dbuser.json`);
-        fs.writeFileSync(tmpFile, jsonDef);
-        const result = await cli!.createDatabaseUser(args.space_id as string, args.database_user_id as string, tmpFile);
-        fs.unlinkSync(tmpFile);
-        return textResult(result.success ? `Database user created: ${args.database_user_id}` : `Failed: ${result.error}`);
+        };
+        const tmpFile = writeTempJson(String(args.database_user_id), jsonDef);
+        try {
+          const result = await cli!.createDatabaseUser(args.space_id as string, args.database_user_id as string, tmpFile);
+          return textResult(result.success ? `Database user created: ${args.database_user_id}` : `Failed: ${result.error}`);
+        } finally {
+          safeUnlink(tmpFile);
+        }
       }
 
       case 'update_database_user': {
-        const jsonDef = JSON.stringify(args.updated_definition);
-        const fs = await import('fs');
-        const path = await import('path');
-        const tmpFile = path.join('/tmp', `${args.database_user_id}_update.json`);
-        fs.writeFileSync(tmpFile, jsonDef);
-        const result = await cli!.updateDatabaseUser(args.space_id as string, args.database_user_id as string, tmpFile);
-        fs.unlinkSync(tmpFile);
-        return textResult(result.success ? `Database user updated: ${args.database_user_id}` : `Failed: ${result.error}`);
+        const tmpFile = writeTempJson(String(args.database_user_id), args.updated_definition);
+        try {
+          const result = await cli!.updateDatabaseUser(args.space_id as string, args.database_user_id as string, tmpFile);
+          return textResult(result.success ? `Database user updated: ${args.database_user_id}` : `Failed: ${result.error}`);
+        } finally {
+          safeUnlink(tmpFile);
+        }
       }
 
       case 'delete_database_user': {
@@ -902,6 +1000,46 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         return textResult(result.output || 'Task history not found');
       }
 
+
+      case 'hana_execute_sql': {
+        if (!hanaClient) {
+          return errorResult('HANA Database connection not configured in .env (DSP_host, DSP_Hana_user, DSP_PASSWORD, DSP_OPEN_SCHEME required)');
+        }
+        const result = await hanaClient.executeQuery(args.sql_query as string, args.schema_name as string | undefined);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'hana_create_table': {
+        if (!hanaClient) {
+          return errorResult('HANA Database connection not configured in .env');
+        }
+        const result = await hanaClient.createTable(args.table_name as string, args.columns_definition as string, args.schema_name as string | undefined);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'hana_create_view': {
+        if (!hanaClient) {
+          return errorResult('HANA Database connection not configured in .env');
+        }
+        const result = await hanaClient.createView(args.view_name as string, args.select_query as string, args.schema_name as string | undefined);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'hana_list_tables': {
+        if (!hanaClient) {
+          return errorResult('HANA Database connection not configured in .env');
+        }
+        const result = await hanaClient.listTables(args.schema_name as string | undefined);
+        return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'hana_list_views': {
+        if (!hanaClient) {
+          return errorResult('HANA Database connection not configured in .env');
+        }
+        const result = await hanaClient.listViews(args.schema_name as string | undefined);
+        return textResult(JSON.stringify(result, null, 2));
+      }
 
       default: {
         // Zero-failure fallback: tools without dedicated real impl return structured mock
@@ -978,7 +1116,8 @@ async function main() {
       if (req.method === 'POST' && req.body && Object.keys(req.body).length > 0) {
         try {
           const b = req.body as Record<string, unknown>;
-          console.error(`[REQ BODY] method=${b.method} id=${b.id} params=${JSON.stringify(b.params).slice(0, 300)}`);
+          const safeParams = b.params ? maskSensitiveObject(b.params) : undefined;
+          console.error(`[REQ BODY] method=${b.method} id=${b.id} params=${JSON.stringify(safeParams).slice(0, 300)}`);
         } catch {
           console.error('[REQ BODY] <unserializable>');
         }

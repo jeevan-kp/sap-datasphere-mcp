@@ -1,4 +1,6 @@
 import { execSync } from 'child_process';
+import path from 'node:path';
+import { sanitizeForLLM } from '../security/sanitizer.js';
 
 export interface CLIResult {
   success: boolean;
@@ -6,26 +8,49 @@ export interface CLIResult {
   error?: string;
 }
 
+import { TokenManager } from '../auth/token-manager.js';
+
 export class DatasphereCLI {
   private host: string;
+  private tokenManager?: TokenManager;
 
-  constructor(host: string) {
-    this.host = host;
+  constructor(host: string, tokenManager?: TokenManager) {
+    this.host = host.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    this.tokenManager = tokenManager;
   }
 
-  private execute(command: string): CLIResult {
+  private async execute(command: string): Promise<CLIResult> {
     try {
+      const localBin = path.resolve(process.cwd(), 'node_modules', '.bin');
+      const env = {
+        ...process.env,
+        PATH: `${localBin}${path.delimiter}${process.env.PATH || ''}`,
+      };
+
+      let tokenArg = '';
+      if (this.tokenManager) {
+        try {
+          const token = await this.tokenManager.getToken();
+          if (token) {
+            tokenArg = ` --access-token "${token}"`;
+          }
+        } catch {
+          // If token acquisition fails, proceed without tokenArg
+        }
+      }
+
       const output = execSync(
-        `datasphere ${command} -H ${this.host} --output json 2>&1`,
-        { encoding: 'utf-8', timeout: 60000 }
+        `datasphere ${command} -H ${this.host}${tokenArg} --output json 2>&1`,
+        { encoding: 'utf-8', timeout: 60000, env }
       );
-      return { success: true, output: output.trim() };
+      return { success: true, output: sanitizeForLLM(output.trim()) };
     } catch (err: unknown) {
       const error = err as { stdout?: string; stderr?: string; message?: string };
+      const rawError = error.stderr || error.message || 'Unknown CLI error';
       return {
         success: false,
-        output: error.stdout || '',
-        error: error.stderr || error.message || 'Unknown CLI error',
+        output: sanitizeForLLM(error.stdout || ''),
+        error: sanitizeForLLM(rawError),
       };
     }
   }
@@ -41,11 +66,11 @@ export class DatasphereCLI {
   async createObject(
     objectType: string,
     spaceId: string,
-    technicalName: string,
+    _technicalName: string,
     filePath: string
   ): Promise<CLIResult> {
     return this.execute(
-      `objects ${objectType} create --space "${spaceId}" --technical-name "${technicalName}" --file-path "${filePath}"`
+      `objects ${objectType} create --space "${spaceId}" --file-path "${filePath}"`
     );
   }
 
@@ -62,11 +87,11 @@ export class DatasphereCLI {
   async updateObject(
     objectType: string,
     spaceId: string,
-    technicalName: string,
+    _technicalName: string,
     filePath: string
   ): Promise<CLIResult> {
     return this.execute(
-      `objects ${objectType} update --space "${spaceId}" --technical-name "${technicalName}" --file-path "${filePath}"`
+      `objects ${objectType} update --space "${spaceId}" --file-path "${filePath}"`
     );
   }
 
@@ -94,7 +119,10 @@ export class DatasphereCLI {
     return this.execute(`objects ${objectType} list --space "${spaceId}"`);
   }
 
-  async listConnections(): Promise<CLIResult> {
+  async listConnections(spaceId?: string): Promise<CLIResult> {
+    if (spaceId) {
+      return this.execute(`spaces connections list --space "${spaceId}"`);
+    }
     return this.execute('spaces connections list');
   }
 
@@ -146,24 +174,21 @@ export class DatasphereCLI {
   }
 
   async runTaskChain(spaceId: string, objectId: string): Promise<CLIResult> {
-    // Official: datasphere tasks chains run --space <id> --object <technical_name> (p.74)
-    if (spaceId && objectId) {
+    if (spaceId) {
       return this.execute(`tasks chains run --space "${spaceId}" --object "${objectId}"`);
     }
-    // Fallback for legacy single-id calls
-    return this.execute(`tasks chains run --space "${spaceId}" --object "${objectId}"`);
+    return this.execute(`tasks chains run --object "${objectId}"`);
   }
 
   async getTaskStatus(spaceId: string, logId: string): Promise<CLIResult> {
-    // Official: datasphere tasks logs get --space <id> --log-id <id> (p.76)
-    if (spaceId && logId) {
+    if (spaceId) {
       return this.execute(`tasks logs get --space "${spaceId}" --log-id "${logId}"`);
     }
-    return this.execute(`tasks logs get --space "${spaceId}" --log-id "${logId}"`);
+    return this.execute(`tasks logs get --log-id "${logId}"`);
   }
 
   async getTaskHistory(spaceId: string, objectId: string): Promise<CLIResult> {
-    return this.execute(`tasks logs list --space "${spaceId}" --object "${objectId}"`);
+    return this.execute(`tasks logs list --space "${spaceId}" --objectname "${objectId}"`);
   }
 
   async getTaskLogs(taskId: string): Promise<CLIResult> {

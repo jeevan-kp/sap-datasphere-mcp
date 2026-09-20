@@ -18,6 +18,7 @@
     "lint": "eslint src/ --ext .ts",
     "lint:fix": "eslint src/ --ext .ts --fix",
     "typecheck": "tsc --noEmit",
+    "test:connection": "tsx scripts/test-connection.ts",
     "docker:build": "docker build -t sap-datasphere-mcp -f docker/Dockerfile .",
     "docker:run": "docker run --env-file .env -p 8080:8080 sap-datasphere-mcp"
   },
@@ -34,18 +35,20 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@sap/datasphere-cli": "^2026.17.0",
+    "@sap/hana-client": "^2.30.27",
     "dotenv": "^16.4.7",
     "express": "^4.21.0",
+    "hdb": "^2.29.6",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^2.1.0",
     "eslint": "^9.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "vitest": "^2.1.0",
-    "@vitest/coverage-v8": "^2.1.0"
+    "vitest": "^2.1.0"
   },
   "engines": {
     "node": ">=20.0.0"

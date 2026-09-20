@@ -8,7 +8,7 @@ export interface ToolDefinition extends Tool {
 const foundationTools: ToolDefinition[] = [
   {
     name: 'test_connection',
-    description: 'Test connectivity to SAP Datasphere tenant',
+    description: "Verify active connectivity to the SAP Datasphere tenant and check OAuth2 token acquisition. WHEN TO USE: Call as the first step upon initialization or to diagnose connection health. PREREQUISITES: DATASPHERE_BASE_URL and OAuth credentials configured in environment. RETURNS: JSON object with tenant status, latency, host URL, and token expiration timestamp.",
     category: 'foundation',
     requiresAuth: true,
     inputSchema: {
@@ -19,7 +19,7 @@ const foundationTools: ToolDefinition[] = [
   },
   {
     name: 'get_current_user',
-    description: 'Get the currently authenticated user information',
+    description: "Retrieve identity, client ID, and account profile of the currently authenticated OAuth technical user or service principal. WHEN TO USE: Call to verify granted privileges, audit service principal identity, or check tenant authorization. PREREQUISITES: test_connection. RETURNS: JSON object containing user ID, name, email, and identity provider details.",
     category: 'foundation',
     requiresAuth: true,
     inputSchema: {
@@ -30,7 +30,7 @@ const foundationTools: ToolDefinition[] = [
   },
   {
     name: 'get_tenant_info',
-    description: 'Get SAP Datasphere tenant metadata and configuration',
+    description: "Retrieve SAP Datasphere tenant metadata, release version, data center, and regional endpoint configuration. WHEN TO USE: Call during environment setup or migration planning to discover tenant capabilities. PREREQUISITES: test_connection. RETURNS: JSON object containing tenantId, version, data center, and service endpoints.",
     category: 'foundation',
     requiresAuth: true,
     inputSchema: {
@@ -41,7 +41,7 @@ const foundationTools: ToolDefinition[] = [
   },
   {
     name: 'get_available_scopes',
-    description: 'List OAuth2 scopes available for the current token',
+    description: "List all OAuth2 scopes granted to the current access token. WHEN TO USE: Call when diagnosing 403 Forbidden errors to determine whether Catalog, DW Administrator, or DW Modeler scopes are active. PREREQUISITES: test_connection. RETURNS: Array of granted OAuth scope strings (e.g., dwaas-core, catalog).",
     category: 'foundation',
     requiresAuth: true,
     inputSchema: {
@@ -55,7 +55,7 @@ const foundationTools: ToolDefinition[] = [
 const spaceTools: ToolDefinition[] = [
   {
     name: 'list_spaces',
-    description: 'List all available spaces in the SAP Datasphere tenant',
+    description: "List all available spaces in the SAP Datasphere tenant with technical names and labels. WHEN TO USE: Fundamental entry point for all Datasphere workflows. Call this first to discover space IDs before querying assets or creating objects. PREREQUISITES: test_connection. RETURNS: Array of space objects containing technical \"name\" (e.g., \"FTDWH_100_INT\") and \"label\".",
     category: 'spaces',
     requiresAuth: true,
     inputSchema: {
@@ -63,7 +63,7 @@ const spaceTools: ToolDefinition[] = [
       properties: {
         include_details: {
           type: 'boolean',
-          description: 'Include detailed space information',
+          description: "Set true to include extended metadata such as storage quotas and member counts. Default: false.",
         },
       },
       required: [],
@@ -71,7 +71,7 @@ const spaceTools: ToolDefinition[] = [
   },
   {
     name: 'get_space_info',
-    description: 'Get detailed information about a specific space',
+    description: "Get comprehensive configuration, storage limits, and metadata for a specific Datasphere space. WHEN TO USE: Use before deploying models or running ETL to check memory/disk quota and space health. PREREQUISITES: Call list_spaces first to obtain a valid space_id. RETURNS: JSON object with space name, label, disk/memory allocation, and properties.",
     category: 'spaces',
     requiresAuth: true,
     inputSchema: {
@@ -79,7 +79,7 @@ const spaceTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID to get information about',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\"). Must be an existing space identifier.",
         },
       },
       required: ['space_id'],
@@ -87,7 +87,7 @@ const spaceTools: ToolDefinition[] = [
   },
   {
     name: 'get_table_schema',
-    description: 'Get column definitions and data types for a table/view',
+    description: "Get column definitions, data types, lengths, and primary key flags for a table or view. WHEN TO USE: Call before writing SQL queries, ETL flows, or view definitions to understand table structure. PREREQUISITES: Call list_spaces to get space_id, and get_space_assets to get table_name. RETURNS: Array of column definitions with technical name, CDS/SQL data type, and primary key status.",
     category: 'spaces',
     requiresAuth: true,
     inputSchema: {
@@ -95,11 +95,11 @@ const spaceTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         table_name: {
           type: 'string',
-          description: 'The table or view name',
+          description: "Technical name of the table or view (e.g., \"1LR_EKKO_01\" or \"fact_view\").",
         },
       },
       required: ['space_id', 'table_name'],
@@ -107,7 +107,7 @@ const spaceTools: ToolDefinition[] = [
   },
   {
     name: 'search_tables',
-    description: 'Search for tables and views by keyword',
+    description: "Search across spaces for tables and views matching a business keyword. WHEN TO USE: Use when searching for specific business data (e.g., \"billing\", \"inventory\", \"sales\") without knowing exact technical names. PREREQUISITES: list_spaces. RETURNS: Array of matching table definitions with their parent space IDs.",
     category: 'spaces',
     requiresAuth: true,
     inputSchema: {
@@ -115,11 +115,11 @@ const spaceTools: ToolDefinition[] = [
       properties: {
         search_term: {
           type: 'string',
-          description: 'Search keyword',
+          description: "Keyword or substring to match against table names and descriptions (e.g., \"billing\" or \"partner\").",
         },
         space_id: {
           type: 'string',
-          description: 'Optional space ID to filter',
+          description: "Optional space ID (e.g., \"FTDWH_100_INT\") to restrict search to a single space.",
         },
       },
       required: ['search_term'],
@@ -127,7 +127,7 @@ const spaceTools: ToolDefinition[] = [
   },
   {
     name: 'create_space',
-    description: 'Create a new space in SAP Datasphere',
+    description: "Create a new governance space in SAP Datasphere via CLI. WHEN TO USE: Use to provision an isolated workspace for a new project or team. PREREQUISITES: Requires DW Administrator role. RETURNS: Creation confirmation with new space ID.",
     category: 'spaces',
     requiresAuth: true,
     inputSchema: {
@@ -135,15 +135,15 @@ const spaceTools: ToolDefinition[] = [
       properties: {
         name: {
           type: 'string',
-          description: 'Technical name for the space',
+          description: "Unique technical uppercase name for the space (e.g., \"FINANCE_DEV\"). Alphanumeric and underscores only.",
         },
         display_name: {
           type: 'string',
-          description: 'Display name for the space',
+          description: "Human-readable display label for the space (e.g., \"Finance Development Space\").",
         },
         description: {
           type: 'string',
-          description: 'Description of the space',
+          description: "Detailed description of the business domain and purpose of the space.",
         },
       },
       required: ['name'],
@@ -154,7 +154,7 @@ const spaceTools: ToolDefinition[] = [
 const objectTools: ToolDefinition[] = [
   {
     name: 'list_objects',
-    description: 'List all modeling objects in a space',
+    description: "List modeling objects in a space filtered by object type via CLI. WHEN TO USE: Use to audit or discover views, local tables, analytic models, data flows, replication flows, or task chains in a space. PREREQUISITES: Call list_spaces first to obtain space_id. RETURNS: JSON array of objects with technicalName and deployment status.",
     category: 'objects',
     requiresAuth: true,
     inputSchema: {
@@ -162,11 +162,11 @@ const objectTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         object_type: {
           type: 'string',
-          description: 'Filter by object type (e.g., local-tables, views, analytic-models)',
+          description: "Object type to filter by. Allowed values: \"local-tables\", \"views\", \"analytic-models\", \"data-flows\", \"replication-flows\", \"task-chains\". Default: \"local-tables\".",
           enum: ['local-tables', 'views', 'analytic-models', 'data-flows', 'task-chains'],
         },
       },
@@ -175,7 +175,7 @@ const objectTools: ToolDefinition[] = [
   },
   {
     name: 'get_object',
-    description: 'Get the definition of a specific modeling object',
+    description: "Retrieve the complete Core Schema Notation (CSN) JSON definition of a modeling object. WHEN TO USE: Use to inspect the full design-time definition of an existing view, local table, or analytic model (including Star Schema associations, dimensions, and measures). PREREQUISITES: Call list_objects to obtain technical name and object type. RETURNS: Full CSN JSON object with definitions, elements, and query specifications.",
     category: 'objects',
     requiresAuth: true,
     inputSchema: {
@@ -183,15 +183,15 @@ const objectTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         object_name: {
           type: 'string',
-          description: 'The technical name of the object',
+          description: "Technical name of the object (e.g., \"fact_view\" or \"New_Analytic_Model\").",
         },
         object_type: {
           type: 'string',
-          description: 'The object type',
+          description: "Object type category: \"local-tables\", \"views\", \"analytic-models\", \"data-flows\".",
           enum: ['local-tables', 'views', 'analytic-models', 'data-flows'],
         },
       },
@@ -200,7 +200,7 @@ const objectTools: ToolDefinition[] = [
   },
   {
     name: 'create_local_table',
-    description: 'Create a new local table in a space',
+    description: "Create and deploy a new local table in the SAP Datasphere Space Catalog using standard CSN schema annotations. WHEN TO USE (CSN APPROACH): Use when the table MUST be visible in the Datasphere Web UI (Data Builder), accessible to business users, or directly consumed by Datasphere Analytic Models and SAP Analytics Cloud (SAC). DO NOT USE FOR: Raw high-speed data lake staging or complex procedural ETL (use hana_create_table instead). PREREQUISITES: Call list_spaces to obtain space_id. Space must have active storage quota. RETURNS: Success confirmation with deployed table name.",
     category: 'objects',
     requiresAuth: true,
     inputSchema: {
@@ -208,15 +208,15 @@ const objectTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         table_name: {
           type: 'string',
-          description: 'Technical name for the table',
+          description: "Technical name for the table (e.g., \"MY_CUSTOM_TABLE\"). Must be uppercase and alphanumeric.",
         },
         columns: {
           type: 'array',
-          description: 'Column definitions',
+          description: "Array of column definition objects: [{ name: \"ID\", type: \"cds.String\", length: 10, isKey: true }, { name: \"AMOUNT\", type: \"cds.Decimal\", precision: 15, scale: 2 }].",
           items: {
             type: 'object',
             properties: {
@@ -232,7 +232,7 @@ const objectTools: ToolDefinition[] = [
   },
   {
     name: 'create_view',
-    description: 'Create a new view in a space using SQL definition',
+    description: "Create and deploy a new semantic SQL view in the SAP Datasphere Space Catalog. WHEN TO USE (CSN APPROACH): Use when the view needs to be visible in Datasphere Graphical View Builder, exposed for SAP Analytics Cloud (SAC) reporting, configured with Data Access Controls (DAC), or enriched with CSN associations (e.g. to_Customer). DO NOT USE FOR: Views using proprietary HANA functions like REAL_VECTOR or complex procedures (use hana_create_view instead). PREREQUISITES: Referenced source tables must already be deployed in the space. Call check_source_tables first. RETURNS: Deployment result confirmation.",
     category: 'objects',
     requiresAuth: true,
     inputSchema: {
@@ -240,19 +240,19 @@ const objectTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         view_name: {
           type: 'string',
-          description: 'Technical name for the view',
+          description: "Technical name for the view (e.g., \"V_BILLING_SUMMARY\").",
         },
         sql_definition: {
           type: 'string',
-          description: 'SQL SELECT statement defining the view',
+          description: "SQL SELECT query defining the view logic (e.g., \"SELECT ebeln, bukrs FROM 1LR_EKKO_01\").",
         },
         description: {
           type: 'string',
-          description: 'Description of the view',
+          description: "Optional human-readable description for end users.",
         },
       },
       required: ['space_id', 'view_name', 'sql_definition'],
@@ -260,7 +260,7 @@ const objectTools: ToolDefinition[] = [
   },
   {
     name: 'deploy_object',
-    description: 'Deploy a modeling object to make it active',
+    description: "Deploy a saved modeling object to activate its runtime artifacts in HANA. WHEN TO USE: Use when an object was updated or created without auto-deploy. PREREQUISITES: Object must exist in design-time. RETURNS: Deployment status.",
     category: 'objects',
     requiresAuth: true,
     inputSchema: {
@@ -268,15 +268,15 @@ const objectTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         object_name: {
           type: 'string',
-          description: 'The technical name of the object to deploy',
+          description: "Technical name of the object to deploy (e.g., \"MY_VIEW\").",
         },
         object_type: {
           type: 'string',
-          description: 'The object type',
+          description: "Type of object: \"views\", \"local-tables\", \"analytic-models\".",
         },
       },
       required: ['space_id', 'object_name', 'object_type'],
@@ -284,7 +284,7 @@ const objectTools: ToolDefinition[] = [
   },
   {
     name: 'delete_object',
-    description: 'Delete a modeling object from a space',
+    description: "Delete a modeling object from a space. WHEN TO USE: Use to clean up temporary test objects. CAUTION: Never call on production or shared assets! PREREQUISITES: Object must not have downstream dependent objects unless force delete is used. RETURNS: Deletion confirmation.",
     category: 'objects',
     requiresAuth: true,
     inputSchema: {
@@ -292,15 +292,15 @@ const objectTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         object_name: {
           type: 'string',
-          description: 'The technical name of the object to delete',
+          description: "Technical name of the object to delete (e.g., \"TMP_TEST_TABLE\").",
         },
         object_type: {
           type: 'string',
-          description: 'The object type',
+          description: "Object type: \"views\", \"local-tables\", \"analytic-models\".",
         },
       },
       required: ['space_id', 'object_name', 'object_type'],
@@ -308,7 +308,7 @@ const objectTools: ToolDefinition[] = [
   },
   {
     name: 'list_catalog_assets',
-    description: 'Browse all catalog assets across spaces',
+    description: "Browse assets across all spaces in the tenant catalog via OData. WHEN TO USE: Use for tenant-wide asset exploration and inventory audits. PREREQUISITES: test_connection. RETURNS: Array of catalog asset objects with spaceName, name, label, and URLs.",
     category: 'objects',
     requiresAuth: true,
     inputSchema: {
@@ -320,15 +320,15 @@ const objectTools: ToolDefinition[] = [
         },
         filter_expression: {
           type: 'string',
-          description: 'OData filter expression',
+          description: "OData $filter expression (e.g., \"spaceName eq 'FTDWH_100_INT'\" or \"supportsAnalyticalQueries eq true\").",
         },
         top: {
           type: 'number',
-          description: 'Max results',
+          description: "Page size limit (e.g., 25).",
         },
         skip: {
           type: 'number',
-          description: 'Skip count',
+          description: "Pagination offset.",
         },
         include_count: {
           type: 'boolean',
@@ -344,7 +344,7 @@ const objectTools: ToolDefinition[] = [
   },
   {
     name: 'get_asset_details',
-    description: 'Get comprehensive asset metadata and schema',
+    description: "Get comprehensive catalog metadata, relational data URL, and analytical capability flags for an asset. WHEN TO USE: Call before querying an asset to determine if it supports relational or analytical extraction. PREREQUISITES: Call get_space_assets first to get asset_id. RETURNS: Full asset descriptor JSON.",
     category: 'objects',
     requiresAuth: true,
     inputSchema: {
@@ -352,11 +352,11 @@ const objectTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         asset_id: {
           type: 'string',
-          description: 'The asset ID',
+          description: "Technical name of the catalog asset (e.g., \"fact_view\" or \"New_Analytic_Model\").",
         },
         expand_fields: {
           type: 'string',
@@ -388,7 +388,7 @@ const objectTools: ToolDefinition[] = [
   },
   {
     name: 'get_space_assets',
-    description: 'List all assets within a specific space',
+    description: "List all catalog assets (tables, views, analytical models) in a specific space. WHEN TO USE: Essential discovery step after list_spaces. Returns capabilities such as supportsAnalyticalQueries and data URLs. PREREQUISITES: Call list_spaces first. RETURNS: Array of asset objects with name, label, relational/analytical URLs, and capability flags.",
     category: 'objects',
     requiresAuth: true,
     inputSchema: {
@@ -396,7 +396,7 @@ const objectTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         filter_expression: {
           type: 'string',
@@ -404,11 +404,11 @@ const objectTools: ToolDefinition[] = [
         },
         top: {
           type: 'number',
-          description: 'Max results',
+          description: "Maximum number of assets to return (default: 50).",
         },
         skip: {
           type: 'number',
-          description: 'Skip count',
+          description: "Number of assets to skip for pagination.",
         },
       },
       required: ['space_id'],
@@ -416,7 +416,7 @@ const objectTools: ToolDefinition[] = [
   },
   {
     name: 'search_catalog',
-    description: 'Search catalog assets by query',
+    description: "Search catalog assets across spaces by keyword or business label. WHEN TO USE: Use to find specific entities (e.g., \"purchase orders\", \"cost center\", \"gl account\") across the tenant. PREREQUISITES: test_connection. RETURNS: Matching asset objects with space, name, label, and capabilities.",
     category: 'objects',
     requiresAuth: true,
     inputSchema: {
@@ -424,11 +424,11 @@ const objectTools: ToolDefinition[] = [
       properties: {
         keyword: {
           type: 'string',
-          description: 'Search keyword',
+          description: "Search term or substring (e.g., \"billing\" or \"ACDOCA\").",
         },
         space_id: {
           type: 'string',
-          description: 'Optional space ID to filter',
+          description: "Optional space ID (e.g., \"FTDWH_100_INT\") to restrict search.",
         },
       },
       required: ['keyword'],
@@ -746,7 +746,7 @@ const queryTools: ToolDefinition[] = [
   },
   {
     name: 'query_analytical_data',
-    description: 'Execute OData analytical queries with $select, $filter, $apply, $top',
+    description: "Execute a multi-dimensional OLAP query against an Analytic Model to aggregate measures across dimensions. Automatically injects mandatory Accept-Language header. WHEN TO USE: Use for analytical models (e.g., New_Analytic_Model) to compute sums, averages, and group metrics. PREREQUISITES: Asset must have supportsAnalyticalQueries: true. Call get_space_assets first. RETURNS: Aggregated multidimensional result set.",
     category: 'queries',
     requiresAuth: true,
     inputSchema: {
@@ -754,11 +754,11 @@ const queryTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         asset_id: {
           type: 'string',
-          description: 'The asset ID',
+          description: "Technical name of the analytical model (e.g., \"New_Analytic_Model\").",
         },
         entity_name: {
           type: 'string',
@@ -766,15 +766,15 @@ const queryTools: ToolDefinition[] = [
         },
         entity_set: {
           type: 'string',
-          description: 'The entity set name',
+          description: "Entity set name (defaults to asset_id).",
         },
         select: {
           type: 'string',
-          description: 'Columns to select',
+          description: "Dimensions and measures to include (e.g., \"PRODUCT_ID,REVENUE,QUANTITY\").",
         },
         filter: {
           type: 'string',
-          description: 'OData filter expression',
+          description: "OData analytical filter expression (e.g., \"REVENUE gt 5000\").",
         },
         apply: {
           type: 'string',
@@ -782,7 +782,7 @@ const queryTools: ToolDefinition[] = [
         },
         top: {
           type: 'number',
-          description: 'Number of rows to return',
+          description: "Max aggregated rows to return (default: 100).",
         },
         orderby: {
           type: 'string',
@@ -794,7 +794,7 @@ const queryTools: ToolDefinition[] = [
   },
   {
     name: 'execute_query',
-    description: 'Execute SQL queries on Datasphere tables/views with SQL to OData conversion',
+    description: "Execute a SQL query against SAP Datasphere or SAP HANA Cloud. When HANA database credentials (DSP_OPEN_SCHEME) are configured, executes directly in HANA; otherwise falls back to relational OData. WHEN TO USE: Use when the user requests an SQL SELECT statement across tables. PREREQUISITES: Call list_spaces to get space_id. RETURNS: JSON array of query result rows.",
     category: 'queries',
     requiresAuth: true,
     inputSchema: {
@@ -802,15 +802,15 @@ const queryTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         sql_query: {
           type: 'string',
-          description: 'SQL SELECT statement',
+          description: "SQL SELECT statement to execute (e.g., \"SELECT * FROM fact_view WHERE REVENUE > 1000\").",
         },
         limit: {
           type: 'number',
-          description: 'Max rows',
+          description: "Max rows to return (default: 100).",
         },
       },
       required: ['space_id', 'sql_query'],
@@ -818,7 +818,7 @@ const queryTools: ToolDefinition[] = [
   },
   {
     name: 'list_relational_entities',
-    description: 'List all available relational entities within an asset for ETL operations',
+    description: "Discover the exact internal OData entity set name for a relational asset. CRITICAL: Assets starting with digits (e.g. 4VD_..., 1LR_...) prepend an underscore (_4VD_...). Call this tool before any relational query to avoid 404 errors. WHEN TO USE: Mandatory prerequisite before calling query_relational_entity. PREREQUISITES: Call get_space_assets first. RETURNS: Array of entity set names.",
     category: 'queries',
     requiresAuth: true,
     inputSchema: {
@@ -826,11 +826,11 @@ const queryTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         asset_id: {
           type: 'string',
-          description: 'The asset ID',
+          description: "Technical name of the asset (e.g., \"1LR_100_FTWPINV6_01\" or \"fact_view\").",
         },
       },
       required: ['space_id', 'asset_id'],
@@ -858,7 +858,7 @@ const queryTools: ToolDefinition[] = [
   },
   {
     name: 'query_relational_entity',
-    description: 'Execute OData queries with large batch processing for ETL extraction',
+    description: "Query records from a relational entity set with OData filter, select, orderby, top, and skip parameters. WHEN TO USE: Primary tool for reading table or view data. PREREQUISITES: Call list_relational_entities first to obtain the exact entity_name. RETURNS: JSON array of data records matching the query criteria.",
     category: 'queries',
     requiresAuth: true,
     inputSchema: {
@@ -866,31 +866,31 @@ const queryTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         asset_id: {
           type: 'string',
-          description: 'The asset ID',
+          description: "Technical name of the asset (e.g., \"fact_view\").",
         },
         entity_name: {
           type: 'string',
-          description: 'The entity name',
+          description: "Exact entity set name returned by list_relational_entities (e.g., \"fact_view\" or \"_1LR_100_FTWPINV6_01\").",
         },
         select: {
           type: 'string',
-          description: 'Columns to select',
+          description: "Comma-separated list of columns to retrieve (e.g., \"FACT_ID,NODE_ID,REVENUE\").",
         },
         filter: {
           type: 'string',
-          description: 'OData filter expression',
+          description: "OData $filter expression (e.g., \"REVENUE gt 1000\" or \"NODE_ID eq 'N1'\").",
         },
         top: {
           type: 'number',
-          description: 'Number of rows to return (up to 50000)',
+          description: "Max number of rows to return (default: 100, max: 1000).",
         },
         skip: {
           type: 'number',
-          description: 'Number of rows to skip',
+          description: "Number of rows to skip for pagination.",
         },
         orderby: {
           type: 'string',
@@ -945,7 +945,7 @@ const queryTools: ToolDefinition[] = [
 const connectionTools: ToolDefinition[] = [
   {
     name: 'list_connections',
-    description: 'List all data source connections',
+    description: "List all active remote connections configured in a specific space (e.g., ABAP, SAPBW, S3, HANA). WHEN TO USE: Call to inspect source system integrations, BW aliases, or data replication connections. PREREQUISITES: Call list_spaces first to obtain space_id. RETURNS: Array of connection objects with name, businessName, typeId, creator, and realtimeReplicationStatus.",
     category: 'connections',
     requiresAuth: true,
     inputSchema: {
@@ -1204,7 +1204,7 @@ const databaseUserTools: ToolDefinition[] = [
   },
   {
     name: 'get_task_history',
-    description: 'Get task history',
+    description: "Retrieve execution logs and run history for an ETL task, replication flow, or data flow in a space. WHEN TO USE: Use to investigate ETL pipeline execution status, diagnose failed runs, or check task duration. PREREQUISITES: Call list_objects to obtain object technical name. RETURNS: Task execution logs with timestamps and status.",
     category: 'tasks',
     requiresAuth: true,
     inputSchema: {
@@ -1212,11 +1212,11 @@ const databaseUserTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         object_id: {
           type: 'string',
-          description: 'The object ID',
+          description: "Technical name of the flow or task (e.g., \"1RF_100_EKPO_01\" or \"1DF_EKKO_01\").",
         },
       },
       required: ['space_id', 'object_id'],
@@ -1290,7 +1290,7 @@ const taskTools: ToolDefinition[] = [
 const abapTools: ToolDefinition[] = [
   {
     name: 'analyze_abap_file',
-    description: 'Analyze an ABAP file and extract its structure (tables, fields, joins, logic). Use this to understand the ABAP code before converting it.',
+    description: "Analyze an ABAP routine or transformation file and extract SQL/CDS conversion patterns. WHEN TO USE: Use during BW migration to convert BW start/end/expert routines into SQL logic. PREREQUISITES: None. RETURNS: Extracted field assignments, SQL expressions, and conversion recommendations.",
     category: 'abap',
     requiresAuth: false,
     inputSchema: {
@@ -1306,7 +1306,7 @@ const abapTools: ToolDefinition[] = [
   },
   {
     name: 'check_source_tables',
-    description: 'Check if the source tables from ABAP code exist in Datasphere and get their metadata',
+    description: "Verify that required replicated source tables exist and are deployed in the target Datasphere space. WHEN TO USE: Mandatory pre-flight check before deploying SQL views or data flows that depend on source tables (e.g., 0FI_ACDOCA_10, 1LR_EKKO_01). PREREQUISITES: Call list_spaces first. RETURNS: Object indicating which tables exist and which are missing.",
     category: 'abap',
     requiresAuth: true,
     inputSchema: {
@@ -1314,7 +1314,7 @@ const abapTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The Datasphere space to search in',
+          description: "Technical name of the space (e.g., \"FTDWH_100_INT\").",
         },
         table_names: {
           type: 'array',
@@ -1327,7 +1327,7 @@ const abapTools: ToolDefinition[] = [
   },
   {
     name: 'validate_sql_view',
-    description: 'Validate a SQL view definition before deploying. Check syntax, column names, and table references.',
+    description: "Validate SQL view syntax, check for dangerous operations (DROP, TRUNCATE), and ensure all referenced tables exist in the target space. WHEN TO USE: Call prior to calling create_view or deploy_view_to_datasphere. PREREQUISITES: Call check_source_tables first. RETURNS: Validation status with list of detected issues or confirmation of readiness.",
     category: 'abap',
     requiresAuth: false,
     inputSchema: {
@@ -1340,7 +1340,7 @@ const abapTools: ToolDefinition[] = [
         source_tables: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Expected source tables',
+          description: "Array of tables that must be referenced by the query.",
         },
       },
       required: ['sql_definition'],
@@ -1376,7 +1376,7 @@ const abapTools: ToolDefinition[] = [
   },
   {
     name: 'get_abap_conversion_guide',
-    description: 'Get ABAP to SQL conversion patterns and best practices. Use this as reference when converting ABAP code.',
+    description: "Retrieve recommended conversion patterns, rules, and best practices for translating ABAP transformation routines into SAP Datasphere SQL/CDS views. WHEN TO USE: Call for architectural guidance when migrating complex ABAP routines. PREREQUISITES: None. RETURNS: Markdown guide with code pattern translations.",
     category: 'abap',
     requiresAuth: false,
     inputSchema: {
@@ -1448,14 +1448,14 @@ const monitoringTools: ToolDefinition[] = [
 const bwQueryTools: ToolDefinition[] = [
   {
     name: 'bw_inspect_provider',
-    description: 'Read InfoProvider metadata from BW (characteristics, key figures, hierarchies). Read-only. Use for ABAP-to-Datasphere conversion context.',
+    description: "Inspect an SAP BW InfoProvider (ADSO, CompositeProvider, InfoCube) via remote connection. WHEN TO USE: First step in BW2DSP migration. Call to extract InfoObjects, dimensions, key figures, and compounding logic. PREREQUISITES: Call list_connections to verify SAPBW connection. RETURNS: Detailed structure of dimensions and metrics.",
     category: 'bw_queries',
     requiresAuth: true,
     inputSchema: {
       type: 'object' as const,
       properties: {
-        alias: { type: 'string', description: 'Connection alias' },
-        project: { type: 'string', description: 'BW project name' },
+        alias: { type: 'string', description: "Connection alias for the SAP BW system configured in Datasphere (e.g., \"FTDWH_x7A\")." },
+        project: { type: 'string', description: "BW project or source area name." },
         provider: { type: 'string', description: 'InfoProvider technical name (e.g., 0D_SD01)' },
       },
       required: ['alias', 'project', 'provider'],
@@ -1463,29 +1463,29 @@ const bwQueryTools: ToolDefinition[] = [
   },
   {
     name: 'bw_read_query',
-    description: 'Read BW query definition including axes, key figures, filters, variables, formulas. Essential for understanding ABAP BW query structure before conversion.',
+    description: "Read full BEx / BW query specification including formulas, calculated key figures, restricted key figures, variables, and filters. WHEN TO USE: Essential step before modeling Datasphere Analytic Models to replicate BW business logic. PREREQUISITES: Call bw_list_queries to obtain technicalName. RETURNS: Detailed query specification JSON.",
     category: 'bw_queries',
     requiresAuth: true,
     inputSchema: {
       type: 'object' as const,
       properties: {
-        alias: { type: 'string', description: 'Connection alias' },
-        project: { type: 'string', description: 'BW project name' },
-        technicalName: { type: 'string', description: 'Query technical name' },
+        alias: { type: 'string', description: "Connection alias for the SAP BW system (e.g., \"FTDWH_x7A\")." },
+        project: { type: 'string', description: "BW project name." },
+        technicalName: { type: 'string', description: "Technical name of the BW query." },
       },
       required: ['alias', 'project', 'technicalName'],
     },
   },
   {
     name: 'bw_list_queries',
-    description: 'List all BW queries on an InfoProvider. Use to discover existing queries for batch conversion.',
+    description: "List all BEx / BW Queries defined on a specific InfoProvider. WHEN TO USE: Use during BW migration planning to inventory all reporting queries built on a provider. PREREQUISITES: Call bw_inspect_provider first. RETURNS: Array of query technical names and descriptions.",
     category: 'bw_queries',
     requiresAuth: true,
     inputSchema: {
       type: 'object' as const,
       properties: {
-        alias: { type: 'string', description: 'Connection alias' },
-        project: { type: 'string', description: 'BW project name' },
+        alias: { type: 'string', description: "Connection alias for the SAP BW system (e.g., \"FTDWH_x7A\")." },
+        project: { type: 'string', description: "BW project name." },
         provider: { type: 'string', description: 'InfoProvider technical name' },
       },
       required: ['alias', 'project', 'provider'],
@@ -1523,6 +1523,109 @@ const bwQueryTools: ToolDefinition[] = [
   },
 ];
 
+const hanaTools: ToolDefinition[] = [
+  {
+    name: 'hana_execute_sql',
+    description: "Execute SQL queries or DDL directly on SAP HANA Cloud in the authorized Open SQL Schema (DSP_OPEN_SCHEME). Write operations (CREATE, DROP, INSERT, ALTER) are strictly restricted to DSP_OPEN_SCHEME. WHEN TO USE: Primary tool for direct SQL execution, table creation, and ad-hoc analytics in the user Open SQL Schema. PREREQUISITES: HANA credentials (DSP_host, DSP_Hana_user, DSP_PASSWORD, DSP_OPEN_SCHEME) in .env. RETURNS: Query result rows or execution message.",
+    category: 'hana',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        sql_query: {
+          type: 'string',
+          description: "SQL statement to execute. Write operations must target an authorized schema (default: DSP_OPEN_SCHEME / FTDWH_100_INT).",
+        },
+        schema_name: {
+          type: 'string',
+          description: "Optional target schema name (defaults to DSP_OPEN_SCHEME / FTDWH_100_INT if omitted). Supports any authorized space/schema requested by user context (e.g. FTDWH_100_INT).",
+        },
+      },
+      required: ['sql_query'],
+    },
+  },
+  {
+    name: 'hana_create_table',
+    description: "Create a physical column table directly in SAP HANA Cloud in the authorized Open SQL Schema (DSP_OPEN_SCHEME). WHEN TO USE (HANA SQL APPROACH): Use for high-volume data staging, fast data ingestion (via Python, ODBC, JDBC, or Kafka), temporary/scratchpad tables, or when native HANA features (indexes, partitions, REAL_VECTOR) are required without Datasphere OData catalog overhead. DO NOT USE FOR: Final analytical models that business users need to view and edit in Datasphere Data Builder (use create_local_table for that). PREREQUISITES: HANA database credentials configured. RETURNS: Success confirmation.",
+    category: 'hana',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        table_name: {
+          type: 'string',
+          description: "Technical name of the new table (e.g., \"INVENTORY_STAGING\"). Alphanumeric characters only.",
+        },
+        columns_definition: {
+          type: 'string',
+          description: "SQL column definitions (e.g., \"ID INT PRIMARY KEY, PRODUCT_NAME NVARCHAR(100), PRICE DECIMAL(15, 2), UPDATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP\").",
+        },
+        schema_name: {
+          type: 'string',
+          description: "Optional target schema name (defaults to DSP_OPEN_SCHEME / FTDWH_100_INT if omitted). Supports any authorized space/schema requested by user context (e.g. FTDWH_100_INT).",
+        },
+      },
+      required: ['table_name', 'columns_definition'],
+    },
+  },
+  {
+    name: 'hana_create_view',
+    description: "Create a SQL view directly in SAP HANA Cloud in the authorized Open SQL Schema (DSP_OPEN_SCHEME). WHEN TO USE (HANA SQL APPROACH): Use for advanced SQL transforms that leverage full SAP HANA Cloud engine capabilities (multi-tier CTEs, window functions like ROW_NUMBER/RANK, full-text search, graph queries, vector similarity search) or for direct consumption by external BI tools (Power BI, Tableau, DBeaver) connecting to HANA port 443. DO NOT USE FOR: Views that must be edited in Datasphere Graphical View Builder or consumed by SAC without a Database User connection (use create_view for that). PREREQUISITES: HANA database credentials configured. RETURNS: Success confirmation.",
+    category: 'hana',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        view_name: {
+          type: 'string',
+          description: "Technical name of the new view (e.g., \"V_INVENTORY_ACTIVE\").",
+        },
+        select_query: {
+          type: 'string',
+          description: "SQL SELECT statement defining the view (e.g., \"SELECT ID, PRODUCT_NAME FROM INVENTORY_STAGING WHERE PRICE > 0\").",
+        },
+        schema_name: {
+          type: 'string',
+          description: "Optional target schema name (defaults to DSP_OPEN_SCHEME / FTDWH_100_INT if omitted). Supports any authorized space/schema requested by user context (e.g. FTDWH_100_INT).",
+        },
+      },
+      required: ['view_name', 'select_query'],
+    },
+  },
+  {
+    name: 'hana_list_tables',
+    description: "List all tables existing in the authorized Open SQL Schema (DSP_OPEN_SCHEME) by querying SYS.TABLES. WHEN TO USE: Call to inspect existing tables created by database users in the Open SQL Schema. PREREQUISITES: HANA database credentials configured. RETURNS: Array of table records with TABLE_NAME, TABLE_TYPE, and COMMENTS.",
+    category: 'hana',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schema_name: {
+          type: 'string',
+          description: "Optional target schema name (defaults to DSP_OPEN_SCHEME / FTDWH_100_INT if omitted). Supports any authorized space/schema requested by user context (e.g. FTDWH_100_INT).",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'hana_list_views',
+    description: "List all views existing in the authorized Open SQL Schema (DSP_OPEN_SCHEME) by querying SYS.VIEWS. WHEN TO USE: Call to inspect existing SQL views created in the Open SQL Schema. PREREQUISITES: HANA database credentials configured. RETURNS: Array of view records with VIEW_NAME and COMMENTS.",
+    category: 'hana',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        schema_name: {
+          type: 'string',
+          description: "Optional target schema name (defaults to DSP_OPEN_SCHEME / FTDWH_100_INT if omitted). Supports any authorized space/schema requested by user context (e.g. FTDWH_100_INT).",
+        },
+      },
+      required: [],
+    },
+  },
+];
+
 export function getAllTools(profile: 'lean' | 'full' = 'lean'): ToolDefinition[] {
   const allTools = [
     ...foundationTools,
@@ -1536,6 +1639,7 @@ export function getAllTools(profile: 'lean' | 'full' = 'lean'): ToolDefinition[]
     ...abapTools,
     ...bwQueryTools,
     ...monitoringTools,
+    ...hanaTools,
   ];
 
   if (profile === 'lean') {

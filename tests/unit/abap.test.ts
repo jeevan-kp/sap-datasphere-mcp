@@ -44,5 +44,46 @@ describe('CDS Converter', () => {
 
     expect(result).toBeDefined();
     expect(result.sql).toContain('CREATE VIEW');
+    expect(result.jsonDefinition).toHaveProperty('definitions');
   });
 });
+
+describe('BW Converter - Universal Table & CSN Engine', () => {
+  it('converts custom table (Z*) transformation with CTE and deduplication', async () => {
+    const { BWConverter } = await import('../../src/abap/converters/bw.js');
+    const converter = new BWConverter();
+
+    const transformation = {
+      name: 'TR_ZCUSTOM_SALES',
+      sourceFields: [{ name: 'ZDOC_NUM' }, { name: 'KUNNR' }, { name: 'AMOUNT' }],
+      targetFields: [
+        { name: 'DOC_ID' },
+        { name: 'CUSTOMER_ID' },
+        { name: 'NET_AMOUNT', formula: 'src."AMOUNT" * 1.1' },
+      ],
+    };
+
+    const result = converter.convert(transformation, 'V_CUSTOM_SALES', 'FTDWH_100_INT', {
+      sourceTable: 'ZSALES_STAGE',
+      lookupTables: [
+        { table: 'ZKNA1_CUSTOM', joinKeys: ['KUNNR'], selectFields: ['LAND1'] },
+      ],
+    });
+
+    expect(result).toBeDefined();
+    expect(result.sql).toContain('WITH base_source AS');
+    expect(result.sql).toContain('ROW_NUMBER() OVER (PARTITION BY "KUNNR" ORDER BY 1) AS _lookup_rn');
+    expect(result.sql).toContain('LEFT OUTER JOIN dedup_lookup_1 AS lkp1');
+    expect(result.sql).toContain('lkp1._lookup_rn = 1');
+    expect(result.cliCommand).toBe('datasphere objects views create -y "FTDWH_100_INT" -F "V_CUSTOM_SALES.json"');
+
+    // Verify 100% CSN JSON compliance
+    const csn = result.jsonDefinition as any;
+    expect(csn.definitions).toBeDefined();
+    expect(csn.definitions.V_CUSTOM_SALES).toBeDefined();
+    expect(csn.definitions.V_CUSTOM_SALES['@ObjectModel.modelingPattern']).toEqual({ '#': 'FACT' });
+    expect(csn.definitions.V_CUSTOM_SALES['@Analytics.dataCategory']).toEqual({ '#': 'CUBE' });
+    expect(csn.definitions.V_CUSTOM_SALES.elements.NET_AMOUNT.type).toBe('cds.Decimal');
+  });
+});
+

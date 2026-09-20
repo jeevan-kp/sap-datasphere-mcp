@@ -1,5 +1,7 @@
 import type { OAuthToken } from '../types/index.js';
 
+import { sanitizeForLLM } from '../security/sanitizer.js';
+
 export class TokenManager {
   private token: OAuthToken | null = null;
   private refreshBufferMs = 60000;
@@ -38,16 +40,31 @@ export class TokenManager {
       body: body.toString(),
     });
 
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
+
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`OAuth token request failed: ${response.status} ${text}`);
+      throw new Error(`OAuth token request failed: ${response.status} ${sanitizeForLLM(text.slice(0, 300))}`);
     }
 
-    const data = await response.json() as {
+    if (!contentType.includes('application/json')) {
+      throw new Error(
+        `OAuth endpoint returned status ${response.status} with non-JSON content-type "${contentType}". ` +
+        `Please verify DATASPHERE_TOKEN_URL in your .env.`
+      );
+    }
+
+    let data: {
       access_token: string;
       expires_in: number;
       token_type: string;
     };
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error('OAuth token response is not valid JSON. Please verify DATASPHERE_TOKEN_URL.');
+    }
 
     this.token = {
       accessToken: data.access_token,

@@ -1,5 +1,6 @@
 import { TokenManager } from '../auth/token-manager.js';
 import type { DatasphereConfig } from '../types/index.js';
+import { sanitizeForLLM } from '../security/sanitizer.js';
 
 export class DatasphereClient {
   private tokenManager: TokenManager;
@@ -17,7 +18,8 @@ export class DatasphereClient {
   private async request(
     method: string,
     path: string,
-    body?: object
+    body?: object,
+    isRetry = false
   ): Promise<unknown> {
     const token = await this.tokenManager.getToken();
     const url = `${this.baseUrl}${path}`;
@@ -26,6 +28,7 @@ export class DatasphereClient {
       'Authorization': `Bearer ${token}`,
       'User-Agent': 'Datasphere-MCP-Server/1.0',
       'Accept': 'application/json',
+      'Accept-Language': 'en',
     };
 
     if (body) {
@@ -38,14 +41,15 @@ export class DatasphereClient {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (response.status === 401) {
+    if (response.status === 401 && !isRetry) {
       this.tokenManager.revoke();
-      return this.request(method, path, body);
+      return this.request(method, path, body, true);
     }
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`API request failed: ${response.status} ${text}`);
+      const sanitized = sanitizeForLLM(text);
+      throw new Error(`API request failed: ${response.status} ${sanitized}`);
     }
 
     const contentType = response.headers.get('content-type') || '';
@@ -76,7 +80,17 @@ export class DatasphereClient {
   }
 
   async getSpaceInfo(spaceId: string): Promise<unknown> {
-    return this.get(`/api/v1/datasphere/consumption/catalog/spaces('${encodeURIComponent(spaceId)}')`);
+    try {
+      return await this.get(`/api/v1/datasphere/consumption/catalog/spaces('${encodeURIComponent(spaceId)}')`);
+    } catch {
+      // Fallback to searching the space in the catalog spaces list
+      const allSpaces = await this.listSpaces() as { value?: Array<{ name: string; label: string }> };
+      const match = allSpaces?.value?.find(s => s.name === spaceId || s.label === spaceId);
+      if (match) {
+        return match;
+      }
+      throw new Error(`Space "${spaceId}" not found in Datasphere catalog`);
+    }
   }
 
   async getCatalogRoot(): Promise<unknown> {
@@ -92,14 +106,25 @@ export class DatasphereClient {
   }
 
   async getCatalogAsset(spaceId: string, assetId: string): Promise<unknown> {
-    return this.get(
-      `/api/v1/datasphere/consumption/catalog/spaces('${encodeURIComponent(spaceId)}')/assets('${encodeURIComponent(assetId)}')`
-    );
+    try {
+      return await this.get(
+        `/api/v1/datasphere/consumption/catalog/spaces('${encodeURIComponent(spaceId)}')/assets('${encodeURIComponent(assetId)}')`
+      );
+    } catch {
+      // Fallback: query assets filtered by spaceName and asset name
+      const res = await this.get(
+        `/api/v1/datasphere/consumption/catalog/assets?$filter=spaceName eq '${encodeURIComponent(spaceId)}' and name eq '${encodeURIComponent(assetId)}'`
+      ) as { value?: unknown[] };
+      if (res?.value && res.value.length > 0) {
+        return res.value[0];
+      }
+      throw new Error(`Asset "${assetId}" not found in space "${spaceId}"`);
+    }
   }
 
   async getSpaceAssets(spaceId: string): Promise<unknown> {
     return this.get(
-      `/api/v1/datasphere/consumption/catalog/spaces('${encodeURIComponent(spaceId)}')/assets`
+      `/api/v1/datasphere/consumption/catalog/assets?$filter=spaceName eq '${encodeURIComponent(spaceId)}'`
     );
   }
 
@@ -166,7 +191,7 @@ export class DatasphereClient {
   }
 
   async getConsumptionMetadata(): Promise<unknown> {
-    return this.get('/api/v1/datasphere/consumption/$metadata');
+    return this.get('/api/v1/datasphere/consumption/catalog/$metadata');
   }
 
   async searchCatalog(keyword: string): Promise<unknown> {

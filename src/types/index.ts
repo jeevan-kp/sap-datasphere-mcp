@@ -18,9 +18,18 @@ export interface ServerConfig {
   exposeDiagnostics: boolean;
 }
 
+export interface HanaConfig {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  schema: string;
+}
+
 export interface AppConfig {
   datasphere: DatasphereConfig;
   server: ServerConfig;
+  hana?: HanaConfig;
 }
 
 export interface OAuthToken {

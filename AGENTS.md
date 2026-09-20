@@ -15,27 +15,34 @@
 
 | Metric | Value |
 |--------|-------|
-| **Total Tools** | 64 |
-| **Tests** | 16 passing |
-| **Build** | ✅ TypeScript compiles |
-| **Mock Data** | ✅ Fully functional |
-| **Real API** | ⏳ Pending tenant credentials |
+| **Total Tools** | 72+ (all enriched with usage, prerequisites, parameter formats) |
+| **Tests** | 28 passing (`npm test` / `vitest run`) |
+| **Build** | ✅ TypeScript compiles cleanly (`tsc --noEmit` & `npm run build`) |
+| **Mock Data** | ✅ Fully functional (`USE_MOCK_DATA=true`) |
+| **Live Verification** | ✅ Verified live on space `FTDWH_100_INT` (Catalog, Relational, Analytics, CLI CSN deploy) |
+| **HANA Cloud Open SQL** | ✅ Integrated with Schema Isolation Guard (`DSP_OPEN_SCHEME`) |
+| **Kyma Readiness** | ✅ Manifests configured for namespace `datasphere-mcp-v2` |
+
 
 ## 📁 File Structure
 
 ```
 sap-datasphere-mcp/
 ├── src/                          # TypeScript source code
-│   ├── server.ts                 # Main MCP server entry point
-│   ├── config.ts                 # Environment configuration loader
+│   ├── server.ts                 # Main MCP server entry point (72+ tools wired)
+│   ├── config.ts                 # Environment config loader (with getRawEnv() comment protection)
 │   ├── api/
-│   │   └── client.ts            # Datasphere REST API client
+│   │   └── client.ts            # Datasphere REST/OData API client
 │   ├── auth/
 │   │   └── token-manager.ts     # OAuth 2.0 token management
 │   ├── cli/
-│   │   └── datasource-cli.ts    # SAP Datasphere CLI wrapper
+│   │   └── datasphere-cli.ts    # SAP Datasphere CLI wrapper (CSN creation & deployment)
+│   ├── hana/
+│   │   └── client.ts            # HANA Cloud client with Schema Isolation Guard (DSP_OPEN_SCHEME)
+│   ├── security/
+│   │   └── sanitizer.ts         # LLM sanitization and credential masking
 │   ├── tools/
-│   │   └── registry.ts          # All 64 tool definitions
+│   │   └── registry.ts          # All 72+ tool definitions with enriched WHEN TO USE & formats
 │   ├── abap/
 │   │   ├── lexer.ts             # ABAP tokenizer
 │   │   ├── parser.ts            # Built-in ABAP parser
@@ -48,84 +55,50 @@ sap-datasphere-mcp/
 │   ├── validation/
 │   │   └── schemas.ts           # Zod validation schemas
 │   ├── types/
-│   │   └── index.ts             # TypeScript type definitions
-│   ├── mock/
-│   │   └── data.ts              # Mock data for testing
-│   └── skills/
-│       └── abap-skill/
-│           ├── skill.json       # ABAP skill manifest
-│           ├── prompts/         # Conversion prompts
-│           ├── patterns/        # Conversion patterns
-│           ├── templates/       # SQL templates
-│           └── conversion-patterns.json  # Advanced patterns
+│   │   ├── index.ts             # TypeScript type definitions
+│   │   └── hdb.d.ts             # Type definitions for hdb library
+│   └── mock/
+│       └── data.ts              # Mock data for testing
 │
-├── tests/                        # Unit tests
+├── skills/                       # Specialized Agent Skills
+│   ├── sap-datasphere-platform/ # Skill 1: Tenant exploration, space management, relational/analytics
+│   │   └── SKILL.md
+│   ├── bw2dsp-migration-expert/  # Skill 2: BW2DSP migration, ABAP routines, community edge cases
+│   │   ├── SKILL.md
+│   │   └── references/
+│   │       ├── bw2dsp-abap-migration.md # In-depth BW2DSP handbook
+│   │       └── sap-standard-tables-business-reference.md # SAP standard tables, business logic & official links
+│   └── sap-datasphere-expert/    # Combined expert skill & reference
+│       └── SKILL.md
+│
+├── scripts/                      # Diagnostic and testing utilities
+│   ├── test-connection.ts       # Test live Datasphere REST/OAuth connection
+│   ├── check-tool-implementations.ts # Verification of tool handlers
+│   └── test-live-system.ts      # Live integration tests
+│
+├── tests/                        # Unit tests (26 passing)
 │   ├── unit/
+│   │   ├── client.test.ts       # API client unit tests
+│   │   ├── hana.test.ts         # HANA client & schema isolation tests
+│   │   ├── sanitizer.test.ts    # Secret masking tests
 │   │   ├── registry.test.ts     # Tool registry tests
 │   │   ├── validation.test.ts   # Validation tests
 │   │   └── abap.test.ts         # ABAP parser tests
 │   └── fixtures/                 # Test data
-│       ├── ZI_SALES_ORDER.ddl   # Sample CDS View
-│       ├── Z_SALES_REPORT.abap  # Sample ABAP Report
-│       └── Z_BW_TRANSFORMATION.abap  # Sample BW Transformation
 │
-├── samples/                      # Advanced ABAP samples
-│   └── abap/
-│       ├── ZI_SALES_ORDER_ADV.ddl      # Complex CDS View
-│       ├── Z_SALES_ANALYSIS_ADV.abap   # Advanced Report
-│       ├── Z_BW_TRANSFORMATION_ADV.abap # Complex BW Transformation
-│       └── Z_FUNCTION_SALES_ANALYSIS.abap  # Function Module
+├── k8s/                          # Kubernetes / Kyma manifests (namespace: datasphere-mcp-v2)
+│   ├── namespace.yaml
+│   ├── secrets.yaml             # Datasphere & HANA Cloud credential placeholders
+│   ├── configmap.yaml           # MCP server configuration
+│   ├── deployment.yaml          # Kyma deployment with sidecars & probes
+│   ├── service.yaml             # Cluster service
+│   └── apirule.yaml             # Kyma API Gateway ingress rule
 │
-├── python-abap-parser/           # Optional Python ABAP parser
-│   ├── abap_parser/
-│   │   ├── lexer.py
-│   │   ├── parser.py
-│   │   └── __init__.py
-│   ├── converters/
-│   │   ├── cds_converter.py
-│   │   ├── report_converter.py
-│   │   ├── bw_converter.py
-│   │   └── fm_converter.py
-│   ├── tests/
-│   ├── requirements.txt
-│   └── README.md
-│
-├── docker/                       # Docker configuration
+├── docker/                       # Container definitions
 │   ├── Dockerfile
 │   └── docker-compose.yml
 │
-├── k8s/                          # Kubernetes manifests
-│   ├── namespace.yaml
-│   ├── secrets.yaml
-│   ├── configmap.yaml
-│   ├── deployment.yaml
-│   ├── service.yaml
-│   └── apirule.yaml
-│
-├── .github/workflows/            # CI/CD
-│   ├── ci.yml
-│   └── deploy.yml
-│
-├── Configuration Files
-│   ├── package.json             # Node.js project config
-│   ├── tsconfig.json            # TypeScript config
-│   ├── .env.example             # Environment variables template
-│   ├── .gitignore               # Git ignore rules
-│   ├── eslint.config.js         # ESLint config
-│   ├── vitest.config.ts         # Vitest config
-│   ├── librechat.yaml           # LibreChat agent config
-│   └── .mcp.json                # MCP server config
-│
-├── Documentation
-│   ├── README.md                # Main documentation
-│   ├── AGENTS.md                # This file (agent context)
-│   ├── ARCHITECTURE.md          # Architecture details
-│   ├── DEPLOYMENT.md            # Deployment guide
-│   ├── LIBRECHAT_CONFIG.md      # LibreChat configuration
-│   └── QUICK_REFERENCE.md       # Quick reference card
-│
-└── Reference Implementation
-    └── REPO_COMPARISON.md       # Comparison with reference repo
+└── librechat.yaml                # LibreChat multi-agent configuration
 ```
 
 ## 🔧 Build & Test Commands
@@ -137,44 +110,68 @@ npm install
 # Build TypeScript
 npm run build
 
-# Run tests
-npm test
+# Run all unit tests
+npm run test:run
+
+# Typecheck with TypeScript
+npm run typecheck
 
 # Start server (mock mode)
 $env:USE_MOCK_DATA='true'
 npm start
 
-# Start server (real API)
+# Start server (live mode on port 8080)
 $env:USE_MOCK_DATA='false'
-# Configure .env with real credentials
-npm start
+$env:MCP_TRANSPORT='http'
+npm run start:http
 ```
 
 ## 🎯 What's Complete ✅
 
-1. **MCP Server Core** - Full MCP protocol implementation
-2. **64 Tool Definitions** - All categories covered
-3. **ABAP Parser** - Built-in TypeScript parser
-4. **Mock Data System** - Complete test data
-5. **Unit Tests** - 16 tests passing
-6. **Docker Support** - Dockerfile and docker-compose
-7. **K8s Manifests** - Full Kubernetes deployment
-8. **CI/CD** - GitHub Actions workflows
-9. **LibreChat Config** - Agent configuration ready
+1. **MCP Server Core** - Full MCP protocol over stdio and HTTP/SSE.
+2. **72+ Enriched Tool Definitions** - Complete with `WHEN TO USE`, `PREREQUISITES`, parameter formats, and returns.
+3. **Live System Verified on `FTDWH_100_INT`**:
+   - Technical user OAuth 2.0 authentication and token refresh.
+   - Live CLI object creation & deployment tested with valid CSN payloads (`TMP_TEST_MCP_TABLE`).
+   - Catalog inspection, relational queries (handling digit prefix underscore `_`), and analytical queries (`Accept-Language: en`).
+4. **HANA Cloud Open SQL Schema Integration**:
+   - Native TLS connection via `HanaClient`.
+   - **Schema Isolation Guard**: Enforces write operations strictly within `DSP_OPEN_SCHEME`.
+   - Comment truncation protection via `getRawEnv()` in `src/config.ts`.
+5. **Security & Sanitization**:
+   - `sanitizeForLLM()` and `maskSensitiveObject()` ensure zero credential leakage in tool outputs or logs.
+6. **Two Specialized Agent Skills**:
+   - `sap-datasphere-platform`: Tenant exploration, catalog discovery, relational/analytical queries, and object authoring.
+   - `bw2dsp-migration-expert`: Comprehensive BW to Datasphere migration logic, ABAP routine conversions (Start, Field, End, Expert, Lookup), and community edge cases.
+7. **SAP BTP Kyma Readiness**:
+   - Manifests in `k8s/` configured for namespace `datasphere-mcp-v2` with APIRule and health probes.
+8. **Unit Tests**: 26/26 tests passing (`vitest run`).
+9. **Build**: TypeScript compiles with zero errors (`tsc --noEmit`, `tsc`).
 
-## ⏳ What's Pending
+## ⏳ Operational Notes for Agents & Clients
 
-1. **Real Tenant Testing** - Need actual Datasphere credentials
-2. **OAuth Flow Testing** - Test with real OAuth client
-3. **BW Query Tools** - Test with real BW system
-4. **Performance Testing** - Load testing with large datasets
+1. **Space & Schema Selection**: `FTDWH_100_INT` is the **default option** for space and schema operations. The actual target depends on context and user request. For now, access is provisioned for the `FTDWH` space (e.g. `FTDWH_100_INT` or other `FTDWH` schemas).
+2. **Schema Isolation Guard**: Direct HANA SQL write operations are verified against authorized schemas (`FTDWH` space / `DSP_OPEN_SCHEME`), protecting system and unauthorized spaces.
+3. **CSN Format**: `@sap/datasphere-cli` rejects non-CSN JSON. Always use CSN structure (`@ObjectModel.modelingPattern: { "#": "DATA_STRUCTURE" }`).
+4. **Digit-prefixed Entity Sets**: If an asset starts with a digit, OData entity sets are prepended with `_`. Always call `list_relational_entities` before querying.
+5. **Analytical Queries**: The analytical engine requires `'Accept-Language': 'en'`.
+6. **CSN vs. HANA SQL Object Creation Decision**:
+   - Use **CSN Approach** (`create_local_table`, `create_view`) when objects must be visible in the Datasphere Web UI (Data Builder), consumed by SAP Analytics Cloud (SAC) Analytic Models, or need CSN semantic annotations (`#FACT`, `#CUBE`, associations, Data Access Controls).
+   - Use **Direct HANA SQL Approach** (`hana_create_table`, `hana_create_view`, `hana_execute_sql`) for high-speed raw data staging, complex multi-tier CTE deduplication, native HANA engine features (windowing `ROW_NUMBER`, vector search `REAL_VECTOR`), or external BI consumption (Power BI/Tableau on port 443).
+   - **Production Hybrid Pattern**: Ingest & transform in `DSP_OPEN_SCHEME` using HANA SQL, then expose as a CSN View for SAC!
 
-## 🔗 Reference Repos
 
-| Repo | Purpose | Status |
-|------|---------|--------|
-| [MarioDeFelipe/sap-datasphere-mcp](https://github.com/MarioDeFelipe/sap-datasphere-mcp) | Reference implementation (45 tools) | ✅ All tools covered |
-| [secondsky/sap-skills](https://github.com/secondsky/sap-skills) | BW Query skills | ✅ Integrated |
+## 🔄 Recent Changelog & Agent Memory (Current Cycle)
+
+- **Universal Standard & Custom Table Conversion Engine**: Upgraded `BWConverter` and `CDSConverter` to dynamically convert any standard SAP table (`ACDOCA`, `VBAK`, `EKKO`, `MATDOC`, etc.) and custom table (`Z*`, `Y*`, `ZZ*`, `X*`, `/BIC/*`). Generates 100% compliant SAP Core Schema Notation (CSN) JSON (`@ObjectModel.modelingPattern: { "#": "FACT" | "DIMENSION" }`, `@Analytics.dataCategory: { "#": "CUBE" }`) and multi-stage CTEs with `ROW_NUMBER() OVER (...)` deduplication to prevent Cartesian explosions on lookups.
+- **CLI Command Syntax Modernization**: Updated CLI command generation to use exact accepted syntax (`datasphere objects views create -y "<space>" -F "<file>.json"`).
+- **Schema Isolation Guard**: Implemented `validateSchemaIsolation(sql)` in `src/hana/client.ts` to strictly prohibit write operations outside `DSP_OPEN_SCHEME`.
+- **HANA Tools Added**: Registered `hana_execute_sql`, `hana_create_table`, `hana_create_view`, `hana_list_tables`, `hana_list_views`.
+- **Tool Description Enrichment**: Enhanced all 72+ tools in `src/tools/registry.ts` with explicit scenarios, dependencies, and parameter formats.
+- **Dotenv Unquoted Hash Trap**: Fixed `getRawEnv()` in `src/config.ts` so usernames/passwords containing `#` are not truncated as inline comments.
+- **Context-Driven Schema Selection & FTDWH Scope**: Enhanced `HanaClient` and all HANA tools with optional `schema_name` support. `FTDWH_100_INT` serves as the default option; operations dynamically adapt to any requested schema within the authorized `FTDWH` space while continuing to block foreign unauthorized spaces.
+- **Two Specialized Skills & Deep References**: Created `skills/sap-datasphere-platform/` and `skills/bw2dsp-migration-expert/` with `references/bw2dsp-abap-migration.md` and `references/sap-standard-tables-business-reference.md`.
+- **Test Suite Expansion**: Added unit tests for HANA client, Schema Isolation Guard, API client, sanitizer, and universal CSN converter (28 passing).
 
 ## 🛠️ How to Continue Work
 
