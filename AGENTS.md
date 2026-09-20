@@ -63,6 +63,9 @@ sap-datasphere-mcp/
 │   └── mock/
 │       └── data.ts              # Mock data for testing
 │
+├── docs/                         # Architecture & Integration Guides
+│   └── SAP_BW_DIRECT_CONNECTION_SETUP_GUIDE.md # Exact checklist for Datasphere & BW Basis teams
+│
 ├── skills/                       # Specialized Agent Skills
 │   ├── sap-datasphere-platform/ # Skill 1: Tenant exploration, space management, relational/analytics
 │   │   └── SKILL.md

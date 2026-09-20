@@ -10,6 +10,12 @@ export interface CLIResult {
 
 import { TokenManager } from '../auth/token-manager.js';
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const packageRoot = path.resolve(__dirname, '..', '..');
+
 export class DatasphereCLI {
   private host: string;
   private tokenManager?: TokenManager;
@@ -21,7 +27,7 @@ export class DatasphereCLI {
 
   private async execute(command: string): Promise<CLIResult> {
     try {
-      const localBin = path.resolve(process.cwd(), 'node_modules', '.bin');
+      const localBin = path.resolve(packageRoot, 'node_modules', '.bin');
       const env = {
         ...process.env,
         PATH: `${localBin}${path.delimiter}${process.env.PATH || ''}`,

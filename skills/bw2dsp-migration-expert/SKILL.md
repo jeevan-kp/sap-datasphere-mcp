@@ -343,5 +343,6 @@ SELECT * FROM transformed_dataset;
 For detailed deep dives into specific CSN modeling schemas, full ABAP transformation routine ASTs, standard SAP tables, and further case studies, see:
 * [BW to Datasphere ABAP Migration Handbook](file:///C:/Users/kpjee/.gemini/antigravity/scratch/sap-datasphere-mcp/skills/bw2dsp-migration-expert/references/bw2dsp-abap-migration.md)
 * [SAP Standard Tables, Business Logic & Official Documentation Reference](file:///C:/Users/kpjee/.gemini/antigravity/scratch/sap-datasphere-mcp/skills/bw2dsp-migration-expert/references/sap-standard-tables-business-reference.md)
+* [SAP BW to Datasphere Direct Connection Setup Guide](file:///C:/Users/kpjee/.gemini/antigravity/scratch/sap-datasphere-mcp/docs/SAP_BW_DIRECT_CONNECTION_SETUP_GUIDE.md)
 
 
