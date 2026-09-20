@@ -116,6 +116,44 @@ The recommended enterprise design pattern combines the speed of HANA SQL with th
 
 ---
 
+## 2.2 Space Administrator & Health Diagnosis Workflow
+
+Space Administrators are responsible for ensuring that all data assets within an authorized space (such as `FTDWH_100_INT`) are properly governed, well-documented, structurally sound, and backed by healthy data pipelines.
+
+```mermaid
+flowchart TD
+    A["audit_space_health<br/>(Calculates Health Score 0-100 & identifies faults)"] --> B{"Faults Identified?"}
+    B -->|"Critical: Failed Pipelines"| C["audit_task_chains<br/>(Inspect status, runtimes, failures)"]
+    B -->|"Critical: Schema Defects"| D["audit_table_health<br/>(Missing Primary Keys, Nullability Traps)"]
+    B -->|"Warning: Missing Documentation"| E["suggest_table_documentation<br/>(SAP Business Context Dictionary + Before/After Diff)"]
+    
+    C --> F["Remediate via get_task_history & pipeline re-trigger"]
+    D --> G["Remediate via hana_execute_sql (ALTER TABLE ADD PRIMARY KEY)"]
+    E --> H["Review Diff & Deploy CSN Patch via objects local-tables/views"]
+```
+
+### 1. Space Health Score Calculation
+`audit_space_health` computes a single score (0-100) reflecting overall space posture:
+* **Starting Score**: 100
+* **Critical Faults** (Failed task chains, empty critical tables): -25 pts each
+* **Warning Faults** (Undocumented tables, schema anomalies): -5 pts each
+* **Documentation Penalty**: Scaled based on documented percentage across all space assets.
+* **Status**: `HEALTHY` (>=80), `WARNING` (50-79), `CRITICAL` (<50).
+
+### 2. Table-Specific Deep Diagnosis (`audit_table_health`)
+Provides structural health for a specific table:
+* **Primary Key Audit**: Checks if the table lacks a primary key, which prevents incremental change data capture (CDC) and degrades join performance.
+* **Documentation Coverage**: Computes column-level documentation coverage ratio.
+* **Activity & Row Count**: Introspects table row counts via `HanaClient` / `DatasphereClient` to confirm whether the table contains active data or is orphaned.
+
+### 3. Context-Aware Documentation Generation (`suggest_table_documentation`)
+When assets lack descriptions or use raw German ERP technical abbreviations (`VBELN`, `POSNR`, `KUNNR`, `LIFNR`, `ACDOCA` fields, etc.):
+* Maps technical column names to standard SAP business descriptions using the built-in Enterprise SAP Business Context Dictionary.
+* Returns a structured **Before & After Diff** (`currentLabel` vs `suggestedLabel` and `confidence`).
+* Generates a ready-to-deploy **CSN Patch Preview** annotating entities with `@EndUserText.label` and `@EndUserText.quickInfo`, enabling space administrators to review and deploy changes directly as-is.
+
+---
+
 ## 3. Tool Mapping & Decision Matrix
 
 This matrix instructs MCP clients on **when to call each tool**, the **mandatory prerequisites**, **input parameters**, and **expected outputs**.
@@ -148,6 +186,10 @@ This matrix instructs MCP clients on **when to call each tool**, the **mandatory
 | **HANA Cloud** | `hana_create_view` | To create a direct SQL View inside `DSP_OPEN_SCHEME`. | Valid SELECT SQL | `view_name: "V_STAGE"`, `select_query: "SELECT ..."` | View creation confirmation |
 | **HANA Cloud** | `hana_list_tables` | To inspect tables physically present in the Open SQL Schema. | None | None | Array of table names in `DSP_OPEN_SCHEME` |
 | **HANA Cloud** | `hana_list_views` | To inspect views physically present in the Open SQL Schema. | None | None | Array of view names in `DSP_OPEN_SCHEME` |
+| **Administration** | `audit_space_health` | Comprehensive space health audit, calculating health score (0-100), categorizing faults (SCHEMA, DOCUMENTATION, TASK_CHAIN, STORAGE), and detecting digit-prefix traps. | None | `space_id: "FTDWH_100_INT"` | SpaceHealthReport with score, asset counts, faults, documentation coverage |
+| **Administration** | `audit_table_health` | Deep per-table diagnosis checking for primary keys, nullability traps, column documentation coverage, and data presence. | Space known | `space_id: "FTDWH_100_INT"`, `table_name: "T_ORDERS"` | TableHealthReport with key status, column issues, and actionable recommendations |
+| **Administration** | `audit_task_chains` | Audit status and execution duration of scheduled task chains / replication pipelines in the space. | Space known | `space_id: "FTDWH_100_INT"` | Array of task chains with execution status, last run timestamp, duration |
+| **Administration** | `suggest_table_documentation` | AI/Dictionary-powered documentation generator mapping SAP ERP/BW technical fields (VBELN, POSNR, KUNNR, etc.) to standard business labels with Before & After diffs and CSN patches. | Table known | `space_id: "FTDWH_100_INT"`, `table_name: "VBAP"`, optional `column_names: [...]` | DocumentationDiff with Before/After label diffs, confidence scores, and CSN patch preview |
 
 ---
 

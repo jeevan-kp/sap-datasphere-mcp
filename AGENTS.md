@@ -15,12 +15,13 @@
 
 | Metric | Value |
 |--------|-------|
-| **Total Tools** | 72+ (all enriched with usage, prerequisites, parameter formats) |
-| **Tests** | 28 passing (`npm test` / `vitest run`) |
+| **Total Tools** | 76+ (including 4 new Space Administrator & Health Diagnosis tools) |
+| **Tests** | 31 passing (`npm test` / `vitest run` across 7 test suites) |
 | **Build** | ✅ TypeScript compiles cleanly (`tsc --noEmit` & `npm run build`) |
 | **Mock Data** | ✅ Fully functional (`USE_MOCK_DATA=true`) |
 | **Live Verification** | ✅ Verified live on space `FTDWH_100_INT` (Catalog, Relational, Analytics, CLI CSN deploy) |
 | **HANA Cloud Open SQL** | ✅ Integrated with Schema Isolation Guard (`DSP_OPEN_SCHEME`) |
+| **Space Administration** | ✅ `SpaceAuditor` module for health scoring, fault diagnosis, and diff-based documentation generation |
 | **Kyma Readiness** | ✅ Manifests configured for namespace `datasphere-mcp-v2` |
 
 
@@ -29,8 +30,10 @@
 ```
 sap-datasphere-mcp/
 ├── src/                          # TypeScript source code
-│   ├── server.ts                 # Main MCP server entry point (72+ tools wired)
+│   ├── server.ts                 # Main MCP server entry point (76+ tools wired)
 │   ├── config.ts                 # Environment config loader (with getRawEnv() comment protection)
+│   ├── admin/
+│   │   └── space-auditor.ts     # Space Administrator & Health Diagnosis Suite
 │   ├── api/
 │   │   └── client.ts            # Datasphere REST/OData API client
 │   ├── auth/
@@ -42,7 +45,7 @@ sap-datasphere-mcp/
 │   ├── security/
 │   │   └── sanitizer.ts         # LLM sanitization and credential masking
 │   ├── tools/
-│   │   └── registry.ts          # All 72+ tool definitions with enriched WHEN TO USE & formats
+│   │   └── registry.ts          # All 76+ tool definitions with enriched WHEN TO USE & formats
 │   ├── abap/
 │   │   ├── lexer.ts             # ABAP tokenizer
 │   │   ├── parser.ts            # Built-in ABAP parser
@@ -76,9 +79,10 @@ sap-datasphere-mcp/
 │   ├── check-tool-implementations.ts # Verification of tool handlers
 │   └── test-live-system.ts      # Live integration tests
 │
-├── tests/                        # Unit tests (26 passing)
+├── tests/                        # Unit tests (31 passing across 7 suites)
 │   ├── unit/
 │   │   ├── client.test.ts       # API client unit tests
+│   │   ├── admin.test.ts        # Space health, fault audit, & doc diff unit tests
 │   │   ├── hana.test.ts         # HANA client & schema isolation tests
 │   │   ├── sanitizer.test.ts    # Secret masking tests
 │   │   ├── registry.test.ts     # Tool registry tests

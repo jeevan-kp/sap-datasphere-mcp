@@ -1626,6 +1626,90 @@ const hanaTools: ToolDefinition[] = [
   },
 ];
 
+const adminTools: ToolDefinition[] = [
+  {
+    name: 'audit_space_health',
+    description: "Perform an evidence-grounded health inspection and fault audit of a Datasphere space. WHEN TO USE: Use by space administrators to evaluate space health score (0-100), identify unmaintained/orphaned tables, find tables missing primary keys, check task chain execution failures, and detect missing business labels. PREREQUISITES: Call list_spaces first. INPUTS: space_id (optional, defaults to FTDWH_100_INT). RETURNS: Space health score, category breakdowns, fault list with severity (CRITICAL, WARNING, INFO), and actionable remediation steps.",
+    category: 'spaces',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        space_id: {
+          type: 'string',
+          description: "Technical name of the space to audit (defaults to FTDWH_100_INT if omitted).",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'audit_table_health',
+    description: "Perform an in-depth schema, primary key, nullability, and documentation health audit of a specific table. WHEN TO USE: Use to diagnose why a table is failing delta replication, check if primary keys are missing, and verify column-level documentation coverage. PREREQUISITES: table_name. INPUTS: table_name, space_id (defaults to FTDWH_100_INT). RETURNS: Table health score, column-by-column audit, primary key status, and remediation recommendations.",
+    category: 'objects',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        table_name: {
+          type: 'string',
+          description: "Technical name of the table to audit (e.g. \"1LR_VBAP_01\" or \"SALES_TRANSACTIONS\").",
+        },
+        space_id: {
+          type: 'string',
+          description: "Technical name of the space (defaults to FTDWH_100_INT).",
+        },
+      },
+      required: ['table_name'],
+    },
+  },
+  {
+    name: 'audit_task_chains',
+    description: "Audit execution health, reliability, failure rates, and run durations for task chains and data replication pipelines in a space. WHEN TO USE: Use to identify failed ETL pipelines, hung replication tasks, and abnormal run times. PREREQUISITES: space_id. INPUTS: space_id (defaults to FTDWH_100_INT), task_chain_id (optional). RETURNS: Health summary of all task chains, failure diagnosis, and execution durations.",
+    category: 'tasks',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        space_id: {
+          type: 'string',
+          description: "Technical name of the space (defaults to FTDWH_100_INT).",
+        },
+        task_chain_id: {
+          type: 'string',
+          description: "Optional specific task chain ID to inspect.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'suggest_table_documentation',
+    description: "Intelligently infer and generate business descriptions and labels for a table and its columns using the SAP business context dictionary. Produces a before-and-after diff so administrators can see the changes as is. WHEN TO USE: Call when tables or columns lack business documentation or labels to automatically enrich catalog discoverability. INPUTS: table_name, space_id (defaults to FTDWH_100_INT), column_names (optional array). RETURNS: Before vs. After diff of column labels, business descriptions, confidence levels, and CSN patch preview.",
+    category: 'objects',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        table_name: {
+          type: 'string',
+          description: "Technical name of the table (e.g. \"1LR_VBAP_01\", \"VBAK\", \"EKPO\").",
+        },
+        space_id: {
+          type: 'string',
+          description: "Technical name of the space (defaults to FTDWH_100_INT).",
+        },
+        column_names: {
+          type: 'array',
+          items: { type: 'string' },
+          description: "Optional list of column names. If omitted, columns are introspected automatically.",
+        },
+      },
+      required: ['table_name'],
+    },
+  },
+];
+
 export function getAllTools(profile: 'lean' | 'full' = 'lean'): ToolDefinition[] {
   const allTools = [
     ...foundationTools,
@@ -1640,6 +1724,7 @@ export function getAllTools(profile: 'lean' | 'full' = 'lean'): ToolDefinition[]
     ...bwQueryTools,
     ...monitoringTools,
     ...hanaTools,
+    ...adminTools,
   ];
 
   if (profile === 'lean') {

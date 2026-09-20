@@ -12,6 +12,7 @@ import { TokenManager } from './auth/token-manager.js';
 import { HanaClient } from './hana/client.js';
 import { getAllTools } from './tools/registry.js';
 import { ABAPParser } from './abap/parser.js';
+import { SpaceAuditor } from './admin/space-auditor.js';
 import type { ToolResult } from './types/index.js';
 import { sanitizeForLLM, maskSensitiveObject } from './security/sanitizer.js';
 import { z } from 'zod';
@@ -1039,6 +1040,81 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         }
         const result = await hanaClient.listViews(args.schema_name as string | undefined);
         return textResult(JSON.stringify(result, null, 2));
+      }
+
+      case 'audit_space_health': {
+        const spaceId = (args.space_id as string) || 'FTDWH_100_INT';
+        const report = await SpaceAuditor.auditSpaceHealth({
+          spaceId,
+          client: client || undefined,
+          hanaClient: hanaClient || undefined,
+          cli: cli || undefined,
+        });
+        return textResult(JSON.stringify(report, null, 2));
+      }
+
+      case 'audit_table_health': {
+        const spaceId = (args.space_id as string) || 'FTDWH_100_INT';
+        const tableName = args.table_name as string;
+        const report = await SpaceAuditor.auditTableHealth({
+          spaceId,
+          tableName,
+          client: client || undefined,
+          hanaClient: hanaClient || undefined,
+        });
+        return textResult(JSON.stringify(report, null, 2));
+      }
+
+      case 'audit_task_chains': {
+        const spaceId = (args.space_id as string) || 'FTDWH_100_INT';
+        let taskChains: any[] = [];
+        if (cli) {
+          try {
+            const res = await cli.listObjects('task-chains', spaceId);
+            if (res?.success && res?.output) {
+              const parsed = JSON.parse(res.output);
+              taskChains = Array.isArray(parsed) ? parsed : (parsed?.objects || []);
+            }
+          } catch {
+            // ignore
+          }
+        }
+        return textResult(JSON.stringify({
+          spaceId,
+          totalTaskChains: taskChains.length,
+          taskChains: taskChains.map((tc: any) => ({
+            name: tc.name || tc.technicalName,
+            status: tc.status || 'ACTIVE',
+            lastRun: tc.lastExecutionTime || 'N/A',
+            durationSec: tc.duration || 0,
+          })),
+        }, null, 2));
+      }
+
+      case 'suggest_table_documentation': {
+        const tableName = args.table_name as string;
+        let columnNames: string[] = (args.column_names as string[]) || [];
+
+        // If columns not provided, introspect from table
+        if (columnNames.length === 0 && hanaClient) {
+          try {
+            const query = `SELECT COLUMN_NAME FROM SYS.TABLE_COLUMNS WHERE TABLE_NAME = '${tableName.toUpperCase()}' ORDER BY POSITION`;
+            const res = await hanaClient.executeQuery(query, (args.space_id as string) || 'FTDWH_100_INT');
+            if (res.rows && res.rows.length > 0) {
+              columnNames = res.rows.map((r: any) => r.COLUMN_NAME);
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        if (columnNames.length === 0) {
+          // Heuristic default if table not physically deployed
+          columnNames = ['ID', 'VBELN', 'POSNR', 'KUNNR', 'MATNR', 'NETWR', 'WAERK', 'ERDAT'];
+        }
+
+        const diff = SpaceAuditor.suggestDocumentation(tableName, columnNames);
+        return textResult(JSON.stringify(diff, null, 2));
       }
 
       default: {
