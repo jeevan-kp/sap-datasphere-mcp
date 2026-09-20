@@ -1,7 +1,15 @@
 import { config as dotenvConfig } from 'dotenv';
 import type { AppConfig } from './types/index.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenvConfig();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, '..');
+const envPath = path.resolve(projectRoot, '.env');
+
+dotenvConfig({ path: fs.existsSync(envPath) ? envPath : undefined });
 
 function requireEnv(name: string, fallback?: string): string {
   const value = process.env[name] || fallback;
@@ -15,13 +23,11 @@ function optionalEnv(name: string, defaultValue: string): string {
   return process.env[name] || defaultValue;
 }
 
-import fs from 'fs';
-import path from 'path';
-
 function getRawEnv(name: string, fallback = ''): string {
-  if (fs.existsSync('.env')) {
+  const targetPath = fs.existsSync(envPath) ? envPath : (fs.existsSync('.env') ? '.env' : null);
+  if (targetPath) {
     try {
-      const lines = fs.readFileSync('.env', 'utf8').split(/\r?\n/);
+      const lines = fs.readFileSync(targetPath, 'utf8').split(/\r?\n/);
       for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed.startsWith(`${name}=`)) {
