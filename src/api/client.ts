@@ -128,8 +128,13 @@ export class DatasphereClient {
     );
   }
 
-  async listConnections(): Promise<unknown> {
-    return this.get('/api/v1/datasphere/consumption/catalog/connections');
+  async listConnections(spaceId?: string): Promise<unknown> {
+    const targetSpace = spaceId || 'FTDWH_100_INT';
+    try {
+      return await this.get(`/api/v1/datasphere/spaces/${encodeURIComponent(targetSpace)}/connections`);
+    } catch {
+      return await this.get(`/dwaas-core/api/v1/spaces/${encodeURIComponent(targetSpace)}/connections`);
+    }
   }
 
   async getMetadata(spaceId: string, assetId: string): Promise<unknown> {

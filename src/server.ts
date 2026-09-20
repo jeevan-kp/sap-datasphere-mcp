@@ -1001,6 +1001,19 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         return textResult(result.output || 'Task history not found');
       }
 
+      case 'list_connections': {
+        const spaceId = (args.space_id as string) || 'FTDWH_100_INT';
+        if (client) {
+          try {
+            const conns = await client.listConnections(spaceId);
+            return textResult(JSON.stringify(conns, null, 2));
+          } catch (err: any) {
+            return errorResult(`Failed to list connections for space ${spaceId}: ${err.message}`);
+          }
+        }
+        return textResult(JSON.stringify(MOCK_CONNECTIONS, null, 2));
+      }
+
 
       case 'hana_execute_sql': {
         if (!hanaClient) {
