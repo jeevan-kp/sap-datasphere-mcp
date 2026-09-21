@@ -364,7 +364,7 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         // 2. Extract asset_id from args or query string (Work Order §3.2 Instance 5 & §3.5)
         let assetId = ((args.asset_id || args.asset_name || args.table_name || '') as string).trim();
         if (!assetId && rawQuery) {
-          const match = rawQuery.match(/\bFROM\s+(?:["'][^"']+["']\.)?["']?([a-zA-Z0-9_]+)["']?/i);
+          const match = rawQuery.match(/\bFROM\s+(?:["']?[a-zA-Z0-9_]+["']?\.)?["']?([a-zA-Z0-9_]+)["']?/i);
           if (match && match[1]) {
             assetId = match[1].trim();
           } else if (/^[a-zA-Z0-9_]+$/.test(rawQuery)) {
@@ -997,7 +997,7 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         // 2. Extract asset_id from args or SQL query (Work Order §3.7)
         let assetId = ((args.asset_id || args.asset_name || args.table_name || '') as string).trim();
         if (!assetId && sqlQuery) {
-          const match = sqlQuery.match(/\bFROM\s+(?:["'][^"']+["']\.)?["']?([a-zA-Z0-9_]+)["']?/i);
+          const match = sqlQuery.match(/\bFROM\s+(?:["']?[a-zA-Z0-9_]+["']?\.)?["']?([a-zA-Z0-9_]+)["']?/i);
           if (match && match[1]) {
             assetId = match[1].trim();
           }
