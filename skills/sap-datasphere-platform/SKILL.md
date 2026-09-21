@@ -179,7 +179,9 @@ This matrix instructs MCP clients on **when to call each tool**, the **mandatory
 | **Relational** | `list_relational_entities` | **MANDATORY before querying relational data** to resolve internal OData entity set names (resolves the `_` prefix for numeric names). | `get_space_assets` | `space_id: "FTDWH_100_INT"`, `asset_id: "..."` | Array of entity set names (e.g. `["_4VD_SUPPLIER"]`) |
 | **Relational** | `query_relational_entity` | To fetch actual records from a table or view using verified entity set name. | `list_relational_entities` | `space_id`, `asset_id`, `entity_name`, `$top`, `$select`, `$filter` | JSON rows returned from table/view |
 | **Relational** | `query_relational` | To fetch records from an asset using asset ID directly. | `get_space_assets` | `space_id`, `asset_id`, `$top`, `$select`, `$filter` | JSON records |
-| **Relational** | `execute_query` | High-level data query with automatic fallback to HANA Open SQL Schema. | Space known | `space_id`, `table_name`, `columns`, `filter`, `limit` | Tabular row results |
+| **Relational** | `execute_query` | SQL query execution with automatic table extraction and HANA fallback. | Space known | `space_id: "FTDWH_100_INT"`, `sql_query: "SELECT ..."` | Tabular row results |
+| **Relational** | `smart_query` | Natural language or SQL queries with auto-extracted table endpoints. | Space known | `space_id: "FTDWH_100_INT"`, `query: "SELECT ..."` | Tabular row results |
+| **Relational** | `analyze_column_distribution` | Statistical data profiling (nulls, distinct values, frequencies). Must pass concrete column name (`*` rejected). | `get_table_schema` | `space_id: "FTDWH_100_INT"`, `asset_id: "1LR_100_FTWPINV6_01"`, `column_name: "BBP_INV_ID"` | Column statistics & frequency distribution |
 | **Analytical** | `get_analytical_service_document` | To inspect available dimensions, measures, and capabilities of an Analytic Model. | `get_space_assets` | `space_id`, `asset_id` | Analytical metadata, dimensions, measure list |
 | **Analytical** | `get_asset_variables` | To discover input variables, prompts, and mandatory parameters of an Analytic Model. | `get_space_assets` | `space_id`, `asset_id` | Variable definitions, types, default values |
 | **Analytical** | `query_analytical_data` | To execute multi-dimensional slice-and-dice queries on Analytic Models. | `get_analytical_service_document` | `space_id`, `asset_id`, `dimensions: [...]`, `measures: [...]`, `filter` | Aggregated multi-dimensional result records |
@@ -219,6 +221,18 @@ This matrix instructs MCP clients on **when to call each tool**, the **mandatory
 ### 4.4 Error: `Access denied: write operations restricted to schema DSP_OPEN_SCHEME`
 * **Root Cause**: An SQL write statement attempted to target an unauthorized schema (e.g. `FTDWH_100_PRD` or `SYS`).
 * **Resolution**: Direct HANA DDL/DML statements may only target the authorized schema configured in `DSP_OPEN_SCHEME`.
+
+### 4.5 Error: `column_name cannot be wildcard '*'` (Code: `-32602`)
+* **Root Cause**: Calling `analyze_column_distribution` with `column_name: "*"` or an empty string. Statistical distribution profiling requires a single column identifier.
+* **Resolution**: Pass a specific column name (e.g., `column_name: "BBP_INV_ID"`). To explore all columns, query `get_table_schema` first.
+
+### 4.6 Error: `HTTP 406 Not Acceptable` on Streamable HTTP transport
+* **Root Cause**: The client omitted the required SSE/JSON accept header when calling `/mcp` on port 8080.
+* **Resolution**: Include header `Accept: application/json, text/event-stream` on all HTTP MCP requests.
+
+### 4.7 Error: Empty URL segment `//` during OData query fallback
+* **Root Cause**: Constructing an endpoint URL from a raw SQL string or unparsed table name.
+* **Resolution**: Always use `execute_query` or `smart_query`, which automatically parse SQL SELECT statements to extract and clean the target table identifier.
 
 ---
 

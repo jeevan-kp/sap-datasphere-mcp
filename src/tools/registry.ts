@@ -52,7 +52,7 @@ const foundationTools: ToolDefinition[] = [
   },
   {
     name: 'test_hana_connection',
-    description: "Explicitly probe the SAP HANA Cloud / Open SQL Schema connection. Validates host, user, password, and schema accessibility at startup. PREREQUISITES: DSP_host, DSP_Hana_user, DSP_PASSWORD, and DSP_OPEN_SCHEMA configured. RETURNS: Connection health status and current schema details.",
+    description: "Explicitly probe the SAP HANA Cloud / Open SQL Schema connection. Validates host, user, password, and schema accessibility at startup. EXAMPLE: {\"space_id\": \"FTDWH_100_INT\"}. PREREQUISITES: DSP_host, DSP_Hana_user, DSP_PASSWORD, and DSP_OPEN_SCHEMA configured. RETURNS: Connection health status, host, user, and schema mapping details.",
     category: 'foundation',
     requiresAuth: true,
     inputSchema: {
@@ -60,7 +60,7 @@ const foundationTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'Optional space ID / Open SQL schema to validate mapping for.',
+          description: 'Optional space ID / Open SQL schema to validate mapping for (e.g., "FTDWH_100_INT").',
         },
       },
       required: [],
@@ -103,7 +103,7 @@ const spaceTools: ToolDefinition[] = [
   },
   {
     name: 'get_table_schema',
-    description: "Get column definitions, data types, lengths, and primary key flags for a table or view. WHEN TO USE: Call before writing SQL queries, ETL flows, or view definitions to understand table structure. PREREQUISITES: Call list_spaces to get space_id, and get_space_assets to get table_name. RETURNS: Array of column definitions with technical name, CDS/SQL data type, and primary key status.",
+    description: "Get column definitions, data types, lengths, and primary key flags for a table or view. WHEN TO USE: Call before writing SQL queries, ETL flows, or view definitions to understand table structure. EXAMPLE: {\"space_id\": \"FTDWH_100_INT\", \"table_name\": \"1LR_100_FTWPINV6_01\"}. PREREQUISITES: Call list_spaces to get space_id, and get_space_assets to get table_name. RETURNS: Array of column definitions with technical name, CDS/SQL data type, and primary key status.",
     category: 'spaces',
     requiresAuth: true,
     inputSchema: {
@@ -115,7 +115,7 @@ const spaceTools: ToolDefinition[] = [
         },
         table_name: {
           type: 'string',
-          description: "Technical name of the table or view (e.g., \"1LR_EKKO_01\" or \"fact_view\").",
+          description: "Technical name of the table or view (e.g., \"1LR_100_FTWPINV6_01\" or \"fact_view\").",
         },
       },
       required: ['space_id', 'table_name'],
@@ -404,7 +404,7 @@ const objectTools: ToolDefinition[] = [
   },
   {
     name: 'get_space_assets',
-    description: "List all catalog assets (tables, views, analytical models) in a specific space. WHEN TO USE: Essential discovery step after list_spaces. Returns capabilities such as supportsAnalyticalQueries and data URLs. PREREQUISITES: Call list_spaces first. RETURNS: Array of asset objects with name, label, relational/analytical URLs, and capability flags.",
+    description: "List all catalog assets (tables, views, analytical models) in a specific space. WHEN TO USE: Essential discovery step after list_spaces. Returns capabilities such as supportsAnalyticalQueries and data URLs. EXAMPLE: {\"space_id\": \"FTDWH_100_INT\", \"top\": 25}. PREREQUISITES: Call list_spaces first. RETURNS: Array of asset objects with name, label, relational/analytical URLs, and capability flags.",
     category: 'objects',
     requiresAuth: true,
     inputSchema: {
@@ -500,7 +500,7 @@ const objectTools: ToolDefinition[] = [
   },
   {
     name: 'analyze_column_distribution',
-    description: 'Statistical analysis of column data distribution and quality profiling. Analyzes distinct values, null counts, and frequency distribution.',
+    description: "Statistical analysis of column data distribution and quality profiling. Analyzes distinct values, null counts, and frequency distribution. CRITICAL: column_name must be a concrete column name; '*' is strictly rejected with code -32602. EXAMPLE: {\"space_id\": \"FTDWH_100_INT\", \"asset_id\": \"1LR_100_FTWPINV6_01\", \"column_name\": \"BBP_INV_ID\", \"sample_size\": 1000}. RETURNS: Column stats with total, distinct, and null counts.",
     category: 'objects',
     requiresAuth: true,
     inputSchema: {
@@ -512,7 +512,7 @@ const objectTools: ToolDefinition[] = [
         },
         asset_id: {
           type: 'string',
-          description: 'Technical name of the table or view asset (e.g., "1LR_EKKO_01")',
+          description: 'Technical name of the table or view asset (e.g., "1LR_EKKO_01" or "1LR_100_FTWPINV6_01")',
         },
         asset_name: {
           type: 'string',
@@ -520,7 +520,7 @@ const objectTools: ToolDefinition[] = [
         },
         column_name: {
           type: 'string',
-          description: 'Target column name to analyze (e.g., "NETWR", "STATUS"). Must be a specific column; "*" is rejected.',
+          description: 'Target column name to analyze (e.g., "BBP_INV_ID", "NETWR", "STATUS"). Must be a specific column; "*" is rejected.',
         },
         sample_size: {
           type: 'number',
@@ -539,7 +539,7 @@ const objectTools: ToolDefinition[] = [
 const queryTools: ToolDefinition[] = [
   {
     name: 'smart_query',
-    description: 'Execute a natural language query against Datasphere data',
+    description: "Execute natural language or SQL queries against Datasphere data. Automatically extracts target table names to prevent malformed empty URLs. EXAMPLE (SQL): {\"space_id\": \"FTDWH_100_INT\", \"query\": \"SELECT * FROM \\\"1LR_100_FTWPINV6_01\\\"\", \"limit\": 10}. EXAMPLE (Natural Language): {\"space_id\": \"FTDWH_100_INT\", \"query\": \"1LR_100_FTWPINV6_01\"}. PREREQUISITES: space_id and query are required. RETURNS: Query results.",
     category: 'queries',
     requiresAuth: true,
     inputSchema: {
@@ -547,11 +547,11 @@ const queryTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID to query',
+          description: 'The space ID to query (e.g., "FTDWH_100_INT")',
         },
         query: {
           type: 'string',
-          description: 'Natural language query or SQL SELECT statement',
+          description: 'Natural language query or SQL SELECT statement (e.g., "SELECT * FROM \"1LR_100_FTWPINV6_01\"")',
         },
         mode: {
           type: 'string',
@@ -818,7 +818,7 @@ const queryTools: ToolDefinition[] = [
   },
   {
     name: 'execute_query',
-    description: "Execute a SQL query against SAP Datasphere or SAP HANA Cloud. When HANA database credentials (DSP_OPEN_SCHEME) are configured, executes directly in HANA; otherwise falls back to relational OData. WHEN TO USE: Use when the user requests an SQL SELECT statement across tables. PREREQUISITES: Call list_spaces to get space_id. RETURNS: JSON array of query result rows.",
+    description: "Execute a SQL query against SAP Datasphere or SAP HANA Cloud. When HANA database credentials (DSP_OPEN_SCHEME) are configured, executes directly in HANA; otherwise falls back to relational OData by automatically extracting table names (preventing malformed empty URLs). EXAMPLE: {\"space_id\": \"FTDWH_100_INT\", \"sql_query\": \"SELECT \\\"BBP_INV_ID\\\", \\\"FISCYEAR\\\" FROM \\\"1LR_100_FTWPINV6_01\\\" LIMIT 10\"}. PREREQUISITES: Call list_spaces to get space_id. RETURNS: JSON array of query result rows.",
     category: 'queries',
     requiresAuth: true,
     inputSchema: {
@@ -842,7 +842,7 @@ const queryTools: ToolDefinition[] = [
   },
   {
     name: 'list_relational_entities',
-    description: "Discover the exact internal OData entity set name for a relational asset. CRITICAL: Assets starting with digits (e.g. 4VD_..., 1LR_...) prepend an underscore (_4VD_...). Call this tool before any relational query to avoid 404 errors. WHEN TO USE: Mandatory prerequisite before calling query_relational_entity. PREREQUISITES: Call get_space_assets first. RETURNS: Array of entity set names.",
+    description: "Discover the exact internal OData entity set name for a relational asset. CRITICAL: Assets starting with digits (e.g. 4VD_..., 1LR_...) prepend an underscore (_4VD_..., _1LR_...). Call this tool before any relational query to avoid 404 errors. EXAMPLE: {\"space_id\": \"FTDWH_100_INT\", \"asset_id\": \"1LR_100_FTWPINV6_01\"}. WHEN TO USE: Mandatory prerequisite before calling query_relational_entity. PREREQUISITES: Call get_space_assets first. RETURNS: Array of entity set names.",
     category: 'queries',
     requiresAuth: true,
     inputSchema: {
@@ -882,7 +882,7 @@ const queryTools: ToolDefinition[] = [
   },
   {
     name: 'query_relational_entity',
-    description: "Query records from a relational entity set with OData filter, select, orderby, top, and skip parameters. WHEN TO USE: Primary tool for reading table or view data. PREREQUISITES: Call list_spaces and get_space_assets. RETURNS: JSON array of data records matching the query criteria.",
+    description: "Query records from a relational entity set with OData filter, select, orderby, top, and skip parameters. Automatically derives leading-digit prefixes (e.g. 1LR... -> _1LR...). EXAMPLE: {\"space_id\": \"FTDWH_100_INT\", \"asset_id\": \"1LR_100_FTWPINV6_01\", \"select\": \"BBP_INV_ID,LOGSYS,FISCYEAR\", \"top\": 10}. WHEN TO USE: Primary tool for reading table or view data. PREREQUISITES: Call list_spaces and get_space_assets. RETURNS: JSON array of data records matching the query criteria.",
     category: 'queries',
     requiresAuth: true,
     inputSchema: {
@@ -1016,7 +1016,7 @@ const connectionTools: ToolDefinition[] = [
   },
   {
     name: 'get_deployed_objects',
-    description: 'List all deployed objects in a space',
+    description: "List and summarize all deployed modeling objects in a space by inspecting catalog metadata. Returns counts by category (tables, views, models) with zero fabricated mock data. EXAMPLE: {\"space_id\": \"FTDWH_100_INT\"}. WHEN TO USE: Call to audit deployed assets in a space. PREREQUISITES: list_spaces. RETURNS: Summary breakdown and array of deployed object descriptors.",
     category: 'connections',
     requiresAuth: true,
     inputSchema: {
@@ -1661,7 +1661,7 @@ const hanaTools: ToolDefinition[] = [
 const adminTools: ToolDefinition[] = [
   {
     name: 'audit_space_health',
-    description: "Perform an evidence-grounded health inspection and fault audit of a Datasphere space. WHEN TO USE: Use by space administrators to evaluate space health score (0-100), identify unmaintained/orphaned tables, find tables missing primary keys, check task chain execution failures, and detect missing business labels. PREREQUISITES: Call list_spaces first. INPUTS: space_id (optional, defaults to FTDWH_100_INT). RETURNS: Space health score, category breakdowns, fault list with severity (CRITICAL, WARNING, INFO), and actionable remediation steps.",
+    description: "Perform an evidence-grounded health inspection and fault audit of a Datasphere space. Audits schema integrity, unmaintained tables, missing keys, and task chain failures with zero mock fallbacks. EXAMPLE: {\"space_id\": \"FTDWH_100_INT\"}. WHEN TO USE: Use by space administrators to evaluate space health score (0-100). PREREQUISITES: Call list_spaces first. RETURNS: Space health score, category breakdowns, fault list with severity, and remediation steps.",
     category: 'spaces',
     requiresAuth: true,
     inputSchema: {
@@ -1677,7 +1677,7 @@ const adminTools: ToolDefinition[] = [
   },
   {
     name: 'audit_table_health',
-    description: "Perform an in-depth schema, primary key, nullability, and documentation health audit of a specific table. WHEN TO USE: Use to diagnose why a table is failing delta replication, check if primary keys are missing, and verify column-level documentation coverage. PREREQUISITES: table_name. INPUTS: table_name, space_id (defaults to FTDWH_100_INT). RETURNS: Table health score, column-by-column audit, primary key status, and remediation recommendations.",
+    description: "Perform an in-depth schema, primary key, nullability, and documentation health audit of a specific table. EXAMPLE: {\"space_id\": \"FTDWH_100_INT\", \"table_name\": \"1LR_100_FTWPINV6_01\"}. WHEN TO USE: Use to diagnose why a table is failing delta replication, check if primary keys are missing, and verify column-level documentation coverage. PREREQUISITES: table_name. INPUTS: table_name, space_id (defaults to FTDWH_100_INT). RETURNS: Table health score, column-by-column audit, primary key status, and remediation recommendations.",
     category: 'objects',
     requiresAuth: true,
     inputSchema: {

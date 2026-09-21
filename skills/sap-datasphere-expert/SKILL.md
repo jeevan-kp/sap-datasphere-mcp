@@ -85,6 +85,103 @@ flowchart TD
 | **Create Table in Open SQL Schema** | `hana_create_table` | `table_name`, `columns_definition` | Column table created in `DSP_OPEN_SCHEME` |
 | **Create View in Open SQL Schema** | `hana_create_view` | `view_name`, `select_query` | SQL view created in `DSP_OPEN_SCHEME` |
 | **Inspect Open Schema Tables/Views**| `hana_list_tables`, `hana_list_views` | None | SYS catalog list of user's schema objects |
+| **Audit Space Health** | `audit_space_health` | `space_id` | Overall score, category breakdown, real faults |
+| **Audit Table Health** | `audit_table_health` | `table_name`, `space_id` | Key integrity, nullability, documentation score |
+| **Column Distribution Profiling** | `analyze_column_distribution` | `space_id`, `asset_id`, `column_name` | Distinct counts, nulls, frequencies |
+
+---
+
+### 3.1 Practical Invocation Recipes (Tested on Live Tenant & `FTDWH_100_INT`)
+
+The following tested JSON payloads demonstrate correct tool usage:
+
+#### Recipe 1: Foundation & Open SQL Probe
+```json
+// Test tenant OAuth2 connectivity
+{ "tool": "test_connection", "arguments": {} }
+
+// Probe SAP HANA Cloud Open SQL Schema
+{ "tool": "test_hana_connection", "arguments": { "space_id": "FTDWH_100_INT" } }
+```
+
+#### Recipe 2: Space & Asset Discovery
+```json
+// List spaces in tenant
+{ "tool": "list_spaces", "arguments": { "include_details": false } }
+
+// Discover top 25 catalog assets in FTDWH_100_INT
+{ "tool": "get_space_assets", "arguments": { "space_id": "FTDWH_100_INT", "top": 25 } }
+```
+
+#### Recipe 3: Table Schema & Health Audit
+```json
+// Inspect table columns, types, and primary keys
+{ "tool": "get_table_schema", "arguments": { "space_id": "FTDWH_100_INT", "table_name": "1LR_100_FTWPINV6_01" } }
+
+// In-depth table health audit
+{ "tool": "audit_table_health", "arguments": { "space_id": "FTDWH_100_INT", "table_name": "1LR_100_FTWPINV6_01" } }
+```
+
+#### Recipe 4: Entity Resolution & Relational Data Extraction
+```json
+// 1. Resolve internal OData entity set name (returns "_1LR_100_FTWPINV6_01")
+{ "tool": "list_relational_entities", "arguments": { "space_id": "FTDWH_100_INT", "asset_id": "1LR_100_FTWPINV6_01" } }
+
+// 2. Query relational records using OData
+{ 
+  "tool": "query_relational_entity", 
+  "arguments": { 
+    "space_id": "FTDWH_100_INT", 
+    "asset_id": "1LR_100_FTWPINV6_01", 
+    "select": "BBP_INV_ID,LOGSYS,FISCYEAR,FTWCINVPT", 
+    "top": 10 
+  } 
+}
+
+// 3. Or query using SQL (server extracts target table automatically)
+{ 
+  "tool": "execute_query", 
+  "arguments": { 
+    "space_id": "FTDWH_100_INT", 
+    "sql_query": "SELECT \"BBP_INV_ID\", \"FISCYEAR\" FROM \"1LR_100_FTWPINV6_01\" LIMIT 10" 
+  } 
+}
+```
+
+#### Recipe 5: Column Statistical Profiling
+```json
+// CRITICAL: Must target a concrete column name; '*' is strictly rejected
+{ 
+  "tool": "analyze_column_distribution", 
+  "arguments": { 
+    "space_id": "FTDWH_100_INT", 
+    "asset_id": "1LR_100_FTWPINV6_01", 
+    "column_name": "BBP_INV_ID", 
+    "sample_size": 1000 
+  } 
+}
+```
+
+#### Recipe 6: Space Deployed Objects & Governance Audit
+```json
+// Audit all deployed modeling objects (evidence-grounded, zero mock data)
+{ "tool": "get_deployed_objects", "arguments": { "space_id": "FTDWH_100_INT" } }
+
+// Complete space health inspection
+{ "tool": "audit_space_health", "arguments": { "space_id": "FTDWH_100_INT" } }
+```
+
+---
+
+### 3.2 Anti-Patterns & Common Pitfalls to Avoid
+
+| Anti-Pattern | Bad Invocation | Why it Fails | Correct Solution |
+|---|---|---|---|
+| **Wildcard Column Profiling** | `analyze_column_distribution` with `column_name: "*"` | Rejected with code `-32602` ("column_name cannot be wildcard '*'"). Statistical distribution requires a single column. | Pass specific column: `column_name: "BBP_INV_ID"`. To profile all columns, call `get_table_schema` first. |
+| **Unresolved Digit-Prefixed Entities** | Querying `/1LR_100_FTWPINV6_01` directly via raw OData | OData entity naming rules require an underscore for identifiers starting with a digit. Results in `404 Not Found`. | Call `list_relational_entities` first, or use `query_relational_entity` (which handles prefixing automatically). |
+| **Malformed SQL Table Extraction** | Manually constructing URLs with SQL string `SELECT * FROM "table"` | Creates malformed URLs with empty segments (`//`). | Use `execute_query` or `smart_query`, which cleanly extract and sanitize the table identifier. |
+| **Missing HTTP SSE Accept Header** | HTTP client calls missing `Accept` header | Server responds with `HTTP 406 Not Acceptable` on Streamable HTTP transport. | Always send `Accept: application/json, text/event-stream`. |
+| **Fabricating Mock Data** | Returning synthetic records on catalog errors | Violates data integrity and hides real configuration or credential issues. | Let real errors surface or inspect upstream errors using `audit_space_health` and `test_connection`. |
 
 ---
 
