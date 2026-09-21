@@ -14,7 +14,14 @@ import { getAllTools } from './tools/registry.js';
 import { ABAPParser } from './abap/parser.js';
 import { SpaceAuditor } from './admin/space-auditor.js';
 import type { ToolResult } from './types/index.js';
-import { sanitizeForLLM, maskSensitiveObject } from './security/sanitizer.js';
+import {
+  sanitizeForLLM,
+  maskSensitiveObject,
+  extractCorrelationId,
+  formatUserFacingError,
+} from './security/sanitizer.js';
+import { logger } from './utils/logger.js';
+import { globalCircuitBreaker } from './utils/circuit-breaker.js';
 import { z } from 'zod';
 import {
   MOCK_SPACES,
@@ -41,6 +48,33 @@ const hanaClient = (useMockData || !config.hana) ? null : new HanaClient(config.
 // Built-in ABAP Parser - extracts metadata for LLM to use
 const abapParser = new ABAPParser();
 
+/**
+ * Standardize and normalize parameters across tools (Work Order §8.3 & Issue #6)
+ */
+function resolveNormalizedParams(args: Record<string, unknown>): {
+  spaceId: string;
+  assetId: string;
+  entityName: string;
+} {
+  const spaceId = ((args.space_id || args.schema_name || '') as string).trim();
+  const assetId = ((args.asset_id || args.asset_name || args.table_name || args.entity_name || '') as string).trim();
+  let entityName = ((args.entity_name || args.asset_id || args.asset_name || args.table_name || '') as string).trim();
+
+  // Normalize dot vs underscore notation (accept both A.B.C and A_B_C)
+  if (entityName.includes('.')) {
+    entityName = entityName.replace(/\./g, '_');
+  }
+
+  // Auto-derive entity_set from asset_id using leading-digit convention (e.g. 4MA_404_X -> _4MA_404_X)
+  if (!args.entity_name && assetId && /^[0-9]/.test(assetId) && !entityName.startsWith('_')) {
+    entityName = `_${assetId}`;
+  } else if (!entityName && assetId) {
+    entityName = assetId;
+  }
+
+  return { spaceId, assetId, entityName };
+}
+
 function writeTempJson(filenamePrefix: string, data: unknown): string {
   const safePrefix = filenamePrefix.replace(/[^a-zA-Z0-9_-]/g, '_');
   const tmpFile = path.join(os.tmpdir(), `${safePrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.json`);
@@ -62,8 +96,12 @@ function textResult(text: string): ToolResult {
   return { content: [{ type: 'text' as const, text: sanitizeForLLM(text) }] };
 }
 
-function errorResult(message: string): ToolResult {
-  return { content: [{ type: 'text' as const, text: `Error: ${sanitizeForLLM(message)}` }], isError: true };
+function errorResult(message: string, code = -32603, correlationId?: string): ToolResult {
+  const userMsg = formatUserFacingError(code, message, correlationId);
+  return {
+    content: [{ type: 'text' as const, text: `Error: ${sanitizeForLLM(userMsg)}` }],
+    isError: true,
+  };
 }
 
 function handleMockTool(name: string, args: Record<string, unknown>): ToolResult {
@@ -293,15 +331,14 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
       case 'smart_query': {
+        const { spaceId, assetId, entityName } = resolveNormalizedParams(args);
         const params: Record<string, string> = {};
         if (args.select) params.$select = args.select as string;
         if (args.filter) params.$filter = args.filter as string;
         if (args.top) params.$top = String(args.top);
         if (args.skip) params.$skip = String(args.skip);
-        const assetId = (args.asset_id as string) || (args.entity_name as string) || '';
-        const entityName = (args.entity_name as string) || assetId;
         const result = await client!.queryRelational(
-          args.space_id as string,
+          spaceId,
           assetId,
           entityName,
           params
@@ -310,20 +347,8 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
       case 'query_relational': {
-        const params: Record<string, string> = {};
-        if (args.select) params.$select = args.select as string;
-        if (args.filter) params.$filter = args.filter as string;
-        if (args.top) params.$top = String(args.top);
-        if (args.skip) params.$skip = String(args.skip);
-        if (args.orderby) params.$orderby = args.orderby as string;
-        const assetId = (args.asset_id as string) || (args.entity_name as string);
-        const result = await client!.queryRelational(
-          args.space_id as string,
-          assetId,
-          args.entity_name as string,
-          params
-        );
-        return textResult(JSON.stringify(result, null, 2));
+        // Work Order §8.3 item 6: Merge query_relational into query_relational_entity
+        return handleTool('query_relational_entity', args);
       }
 
       case 'get_metadata': {
@@ -784,19 +809,32 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
       case 'analyze_column_distribution': {
-        const spaceId = args.space_id as string;
-        const assetName = args.asset_name as string;
-        const columnName = args.column_name as string;
-        let entityName = assetName;
+        const { spaceId, assetId, entityName: defaultEntity } = resolveNormalizedParams(args);
+        const columnName = (args.column_name as string || '').trim();
+
+        // Work Order §4.4 & Verification Checklist #8: Reject column_name: "*" with code -32602
+        if (!columnName || columnName === '*') {
+          const err = new Error("Invalid parameter: column_name cannot be '*'. Specify a concrete column name.");
+          (err as any).code = -32602;
+          throw err;
+        }
+
+        if (!spaceId || !assetId) {
+          const err = new Error("Invalid parameters: space_id and asset_id are required.");
+          (err as any).code = -32602;
+          throw err;
+        }
+
+        let entityName = defaultEntity;
         try {
-          const entities = await client!.listRelationalEntities(spaceId, assetName) as { value?: Array<{ name: string }> };
+          const entities = await client!.listRelationalEntities(spaceId, assetId) as { value?: Array<{ name: string }> };
           if (entities?.value?.[0]?.name) {
             entityName = entities.value[0].name;
           }
         } catch {
-          // fallback to assetName
+          // fallback to defaultEntity
         }
-        const data = await client!.queryRelational(spaceId, assetName, entityName, { '$top': '1000' });
+        const data = await client!.queryRelational(spaceId, assetId, entityName, { '$top': '1000' });
         const rows = (JSON.parse(JSON.stringify(data)).value || []) as any[];
         const values = rows.map((r: any) => r[columnName]).filter((v: any) => v != null);
         const unique = new Set(values);
@@ -906,19 +944,37 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
       case 'query_relational_entity': {
+        const { spaceId, assetId, entityName } = resolveNormalizedParams(args);
         const params: Record<string, string> = {};
         if (args.select) params.$select = args.select as string;
         if (args.filter) params.$filter = args.filter as string;
         if (args.top) params.$top = String(args.top);
         if (args.skip) params.$skip = String(args.skip);
         if (args.orderby) params.$orderby = args.orderby as string;
-        const result = await client!.queryRelational(
-          args.space_id as string,
-          args.asset_id as string,
-          args.entity_name as string,
-          params
-        );
-        return textResult(JSON.stringify(result, null, 2));
+
+        try {
+          const result = await client!.queryRelational(
+            spaceId,
+            assetId,
+            entityName,
+            params
+          );
+          return textResult(JSON.stringify(result, null, 2));
+        } catch (err: any) {
+          // Work Order §8.3 item 5: On unknown entity, return available entity list in error so caller self-corrects in 1 hop
+          if (err.statusCode === 404 || err.code === -32602) {
+            try {
+              const entitiesRes = await client!.listRelationalEntities(spaceId, assetId) as { value?: Array<{ name: string }> };
+              const available = entitiesRes?.value?.map(e => e.name) || [];
+              if (available.length > 0) {
+                err.message = `${err.message}. Available entity sets for asset '${assetId}': [${available.join(', ')}].`;
+              }
+            } catch {
+              // ignore secondary lookup error
+            }
+          }
+          throw err;
+        }
       }
 
       case 'get_relational_odata_service': {
@@ -1019,7 +1075,8 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         if (!hanaClient) {
           return errorResult('HANA Database connection not configured in .env (DSP_host, DSP_Hana_user, DSP_PASSWORD, DSP_OPEN_SCHEME required)');
         }
-        const result = await hanaClient.executeQuery(args.sql_query as string, args.schema_name as string | undefined);
+        const targetSchema = (args.space_id || args.schema_name) as string | undefined;
+        const result = await hanaClient.executeQuery(args.sql_query as string, targetSchema);
         return textResult(JSON.stringify(result, null, 2));
       }
 
@@ -1027,7 +1084,8 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         if (!hanaClient) {
           return errorResult('HANA Database connection not configured in .env');
         }
-        const result = await hanaClient.createTable(args.table_name as string, args.columns_definition as string, args.schema_name as string | undefined);
+        const targetSchema = (args.space_id || args.schema_name) as string | undefined;
+        const result = await hanaClient.createTable(args.table_name as string, args.columns_definition as string, targetSchema);
         return textResult(JSON.stringify(result, null, 2));
       }
 
@@ -1035,7 +1093,8 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         if (!hanaClient) {
           return errorResult('HANA Database connection not configured in .env');
         }
-        const result = await hanaClient.createView(args.view_name as string, args.select_query as string, args.schema_name as string | undefined);
+        const targetSchema = (args.space_id || args.schema_name) as string | undefined;
+        const result = await hanaClient.createView(args.view_name as string, args.select_query as string, targetSchema);
         return textResult(JSON.stringify(result, null, 2));
       }
 
@@ -1153,9 +1212,18 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         return handleMockTool(name, args);
       }
     }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return errorResult(message);
+  } catch (err: any) {
+    const rawMessage = err instanceof Error ? err.message : String(err);
+    const code = typeof err?.code === 'number' ? err.code : -32603;
+    const correlationId = err?.correlationId || extractCorrelationId(rawMessage);
+
+    logger.error(`Tool execution error: ${name}`, {
+      tool: name,
+      correlationId,
+      error: rawMessage,
+    });
+
+    return errorResult(rawMessage, code, correlationId);
   }
 }
 
@@ -1212,25 +1280,39 @@ async function main() {
     // Map to hold active transports by session ID
     const transports = new Map<string, StreamableHTTPServerTransport>();
 
-    // Detailed request logging middleware
+    // Work Order §10: Atomic single-line JSON logging middleware with ISO-8601 timestamps
     app.use((req, res, next) => {
       const start = Date.now();
-      const sessionId = req.headers['mcp-session-id'] || '-';
-      console.error(`[REQ] ${req.method} ${req.originalUrl} | session=${sessionId} | accept=${req.headers['accept'] || '-'} | content-type=${req.headers['content-type'] || '-'}`);
+      const sessionId = (req.headers['mcp-session-id'] as string) || '-';
+      const requestId = randomUUID();
 
-      if (req.method === 'POST' && req.body && Object.keys(req.body).length > 0) {
+      let toolName: string | undefined;
+      if (req.method === 'POST' && req.body) {
         try {
           const b = req.body as Record<string, unknown>;
-          const safeParams = b.params ? maskSensitiveObject(b.params) : undefined;
-          console.error(`[REQ BODY] method=${b.method} id=${b.id} params=${JSON.stringify(safeParams).slice(0, 300)}`);
+          if (b.method === 'tools/call' && typeof b.params === 'object' && b.params !== null) {
+            toolName = (b.params as Record<string, unknown>).name as string;
+          }
         } catch {
-          console.error('[REQ BODY] <unserializable>');
+          // ignore
         }
       }
 
       res.on('finish', () => {
-        const dur = Date.now() - start;
-        console.error(`[RES] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${dur}ms)`);
+        const durationMs = Date.now() - start;
+        const isSuccess = res.statusCode >= 200 && res.statusCode < 400;
+        logger.log({
+          level: isSuccess ? 'INFO' : 'ERROR',
+          requestId,
+          sessionId,
+          method: req.method,
+          path: req.originalUrl,
+          tool: toolName,
+          statusCode: res.statusCode,
+          durationMs,
+          outcome: isSuccess ? 'SUCCESS' : 'FAILURE',
+          message: `${req.method} ${req.originalUrl} -> ${res.statusCode} (${durationMs}ms)`,
+        });
       });
 
       next();

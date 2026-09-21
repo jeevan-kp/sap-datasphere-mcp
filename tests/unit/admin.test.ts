@@ -75,7 +75,7 @@ describe('SpaceAuditor - Space Administrator Suite', () => {
     expect((diff.csnPatchPreview as any).definitions.VBAP_SALES_ITEMS).toBeDefined();
   });
 
-  it('audits performance optimizations and flags unpartitioned tables, unpersisted views, and full-load pipelines', async () => {
+  it('reports real state with 0 assets when no live data is present and does not fabricate mock data', async () => {
     const report = await SpaceAuditor.auditPerformanceOptimizations({
       spaceId: 'FTDWH_100_INT',
       thresholdRows: 100000,
@@ -83,34 +83,56 @@ describe('SpaceAuditor - Space Administrator Suite', () => {
 
     expect(report).toBeDefined();
     expect(report.spaceId).toBe('FTDWH_100_INT');
+    expect(report.tables).toHaveLength(0);
+    expect(report.views).toHaveLength(0);
+    expect(report.pipelines).toHaveLength(0);
+    expect(report.summary.totalAssetsAudited).toBe(0);
+    expect(report.summary.criticalBottlenecks).toBe(0);
+    expect(report.summary.overallOptimizationScore).toBe(100);
+
+    // Confirm NO fabricated ACDOCA_GL_POSTINGS or fake pipelines appear
+    const acdoca = report.tables.find(t => t.tableName.includes('ACDOCA'));
+    expect(acdoca).toBeUndefined();
+    expect(report.recommendationSummary[0]).toContain('No physical tables or views');
+  });
+
+  it('audits performance optimizations when live HANA data is provided', async () => {
+    const mockHanaClient = {
+      executeQuery: async () => ({
+        rows: [
+          {
+            TABLE_NAME: 'SALES_FACT_HUGE',
+            RECORD_COUNT: 7500000,
+            MEMORY_MB: 2800,
+            IS_PARTITIONED: 'FALSE',
+          },
+          {
+            TABLE_NAME: 'ITEMS_NO_PK',
+            RECORD_COUNT: 250000,
+            MEMORY_MB: 120,
+            IS_PARTITIONED: 'FALSE',
+          },
+        ],
+      }),
+    };
+
+    const report = await SpaceAuditor.auditPerformanceOptimizations({
+      spaceId: 'FTDWH_100_INT',
+      thresholdRows: 100000,
+      hanaClient: mockHanaClient,
+    });
+
+    expect(report).toBeDefined();
+    expect(report.spaceId).toBe('FTDWH_100_INT');
     expect(report.summary.totalAssetsAudited).toBeGreaterThan(0);
     expect(report.summary.criticalBottlenecks).toBeGreaterThan(0);
-    expect(report.summary.estimatedMemorySavingsMb).toBeGreaterThan(0);
-    expect(report.summary.overallOptimizationScore).toBeLessThan(100);
 
-    // 1. Table Volume Insight: Check for unpartitioned ACDOCA (>5M rows)
-    const acdoca = report.tables.find(t => t.tableName.includes('ACDOCA'));
-    expect(acdoca).toBeDefined();
-    expect(acdoca?.optimizationPriority).toBe('HIGH');
-    expect(acdoca?.rowCountEstimate).toBeGreaterThanOrEqual(5000000);
-    expect(acdoca?.actionSqlOrCsn).toContain('PARTITION BY RANGE');
-    expect(acdoca?.insights[0]).toContain('Full table scans on unpartitioned');
-
-    // 2. View Persistency Insight: Check for multi-million row unpersisted view
-    const view = report.views.find(v => v.viewName === 'V_FIN_REVENUE_CUBE');
-    expect(view).toBeDefined();
-    expect(view?.optimizationPriority).toBe('HIGH');
-    expect(view?.underlyingVolumeEstimate).toBeGreaterThan(10000000);
-    expect(view?.actionSqlOrCsn).toContain('@Datasphere.persistency');
-
-    // 3. Pipeline Inefficiency Insight: Check for recurring full load on heavy dataset
-    const pipeline = report.pipelines.find(p => p.pipelineName === 'TC_DAILY_ERP_REPLICATION');
-    expect(pipeline).toBeDefined();
-    expect(pipeline?.optimizationPriority).toBe('HIGH');
-    expect(pipeline?.replicationMode).toBe('FULL_LOAD');
-    expect(pipeline?.recommendations[0]).toContain('INITIAL_AND_DELTA');
-
-    // 4. Recommendation Summary
-    expect(report.recommendationSummary.length).toBeGreaterThanOrEqual(3);
+    // Table Volume Insight: Check for unpartitioned SALES_FACT_HUGE (>5M rows)
+    const fact = report.tables.find(t => t.tableName === 'SALES_FACT_HUGE');
+    expect(fact).toBeDefined();
+    expect(fact?.optimizationPriority).toBe('HIGH');
+    expect(fact?.rowCountEstimate).toBe(7500000);
+    expect(fact?.actionSqlOrCsn).toContain('PARTITION BY RANGE');
+    expect(fact?.insights[0]).toContain('Full table scans on unpartitioned');
   });
 });

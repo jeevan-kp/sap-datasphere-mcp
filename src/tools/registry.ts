@@ -484,7 +484,7 @@ const objectTools: ToolDefinition[] = [
   },
   {
     name: 'analyze_column_distribution',
-    description: 'Statistical analysis of column data distribution and quality profiling',
+    description: 'Statistical analysis of column data distribution and quality profiling. Analyzes distinct values, null counts, and frequency distribution.',
     category: 'objects',
     requiresAuth: true,
     inputSchema: {
@@ -492,26 +492,30 @@ const objectTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: 'Technical name of the space (e.g., "FTDWH_100_INT")',
+        },
+        asset_id: {
+          type: 'string',
+          description: 'Technical name of the table or view asset (e.g., "1LR_EKKO_01")',
         },
         asset_name: {
           type: 'string',
-          description: 'The asset name',
+          description: 'Deprecated alias for asset_id',
         },
         column_name: {
           type: 'string',
-          description: 'The column to analyze',
+          description: 'Target column name to analyze (e.g., "NETWR", "STATUS"). Must be a specific column; "*" is rejected.',
         },
         sample_size: {
           type: 'number',
-          description: 'Sample size',
+          description: 'Max sample size for distribution analysis (default: 1000)',
         },
         include_outliers: {
           type: 'boolean',
-          description: 'Include outliers',
+          description: 'Include outlier detection in analysis',
         },
       },
-      required: ['space_id', 'asset_name', 'column_name'],
+      required: ['space_id', 'column_name'],
     },
   },
 ];
@@ -555,7 +559,7 @@ const queryTools: ToolDefinition[] = [
   },
   {
     name: 'query_relational',
-    description: 'Query a relational entity (table/view) using OData parameters',
+    description: '[DEPRECATED: Use query_relational_entity instead] Query a relational entity (table/view) using OData parameters. Forwarded automatically to query_relational_entity.',
     category: 'queries',
     requiresAuth: true,
     inputSchema: {
@@ -563,11 +567,15 @@ const queryTools: ToolDefinition[] = [
       properties: {
         space_id: {
           type: 'string',
-          description: 'The space ID',
+          description: 'Technical name of the space (e.g., "FTDWH_100_INT")',
+        },
+        asset_id: {
+          type: 'string',
+          description: 'Technical name of the asset/table/view',
         },
         entity_name: {
           type: 'string',
-          description: 'The entity (table/view) name',
+          description: 'Optional entity set name (defaults to asset_id)',
         },
         select: {
           type: 'string',
@@ -590,7 +598,7 @@ const queryTools: ToolDefinition[] = [
           description: 'Order by expression',
         },
       },
-      required: ['space_id', 'entity_name'],
+      required: ['space_id'],
     },
   },
   {
@@ -858,7 +866,7 @@ const queryTools: ToolDefinition[] = [
   },
   {
     name: 'query_relational_entity',
-    description: "Query records from a relational entity set with OData filter, select, orderby, top, and skip parameters. WHEN TO USE: Primary tool for reading table or view data. PREREQUISITES: Call list_relational_entities first to obtain the exact entity_name. RETURNS: JSON array of data records matching the query criteria.",
+    description: "Query records from a relational entity set with OData filter, select, orderby, top, and skip parameters. WHEN TO USE: Primary tool for reading table or view data. PREREQUISITES: Call list_spaces and get_space_assets. RETURNS: JSON array of data records matching the query criteria.",
     category: 'queries',
     requiresAuth: true,
     inputSchema: {
@@ -870,11 +878,15 @@ const queryTools: ToolDefinition[] = [
         },
         asset_id: {
           type: 'string',
-          description: "Technical name of the asset (e.g., \"fact_view\").",
+          description: "Technical name of the asset (e.g., \"fact_view\" or \"1LR_100_FTWPINV6_01\").",
+        },
+        asset_name: {
+          type: 'string',
+          description: "Deprecated alias for asset_id.",
         },
         entity_name: {
           type: 'string',
-          description: "Exact entity set name returned by list_relational_entities (e.g., \"fact_view\" or \"_1LR_100_FTWPINV6_01\").",
+          description: "Optional entity set name. If omitted, automatically derived from asset_id (including leading-digit prefixing, e.g. 4VD -> _4VD).",
         },
         select: {
           type: 'string',
@@ -897,7 +909,7 @@ const queryTools: ToolDefinition[] = [
           description: 'Order by expression',
         },
       },
-      required: ['space_id', 'asset_id', 'entity_name'],
+      required: ['space_id', 'asset_id'],
     },
   },
   {
@@ -1536,9 +1548,13 @@ const hanaTools: ToolDefinition[] = [
           type: 'string',
           description: "SQL statement to execute. Write operations must target an authorized schema (default: DSP_OPEN_SCHEME / FTDWH_100_INT).",
         },
+        space_id: {
+          type: 'string',
+          description: "Target space or schema name (e.g. FTDWH_100_INT or DSP_OPEN_SCHEME). Defaults to configured schema if omitted.",
+        },
         schema_name: {
           type: 'string',
-          description: "Optional target schema name (defaults to DSP_OPEN_SCHEME / FTDWH_100_INT if omitted). Supports any authorized space/schema requested by user context (e.g. FTDWH_100_INT).",
+          description: "Deprecated alias for space_id. Target schema name.",
         },
       },
       required: ['sql_query'],
