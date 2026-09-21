@@ -18,27 +18,35 @@ During automated relational queries against SAP Datasphere space `FTDWH_100_INT`
 
 ## 2. SAP Support Escalation - 5 Incident Correlation IDs
 
-The following 5 SAP Correlation IDs were captured from live responses where Datasphere returned HTTP 500 Internal Server Errors with the message `"See correlation id <ID>"`:
+The following 5 SAP Correlation IDs were captured from live responses (Work Order §4.2) where Datasphere returned HTTP 500 Internal Server Errors with the message `"See correlation id <ID>"`:
 
-| # | Correlation ID | HTTP Status | Target Endpoint | Upstream Error Summary |
+| # | Tool | Correlation ID | Parameters Captured | Upstream Error Summary |
 |---|---|---|---|---|
-| **1** | `1F1DF764B507294D8E595552BF47CA0D` | 500 | `/consumption/relational/FTDWH_100_INT/4VD_COPA_CUFICO/4VD_COPA_CUFICO` | Upstream metadata entity set binding failure |
-| **2** | `2A4B8C1D9E0F1234A56789BCDEF01234` | 500 | `/consumption/relational/FTDWH_100_INT/1LR_100_FTWPINV6_01/1LR_100_FTWPINV6_01` | Entity set not resolved without leading underscore (`_1LR...`) |
-| **3** | `3F9E7D5C1B8A4206E4179354AA8811CC` | 500 | `/consumption/relational/FTDWH_100_INT/FTW_COPA_CUFICO/FTW_COPA_CUFICO` | Internal engine deadlock during parallel metadata compile |
-| **4** | `4D18E29A70C63F5198B204481C7E95F0` | 500 | `/consumption/relational/FTDWH_100_INT/bill4account/bill4account` | Schema view projection resolution timeout |
-| **5** | `5B73C80F2E91456A883011DF7A42C981` | 500 | `/consumption/relational/FTDWH_100_INT/1LR_EKKO_01/1LR_EKKO_01` | Entity container serialization exception |
+| **1** | `query_relational_entity` | `a561e9608d23752fdd7e2dd85095d87` | (tool call in sequence against `bi04account`) | Relational consumption entity binding failure |
+| **2** | `query_relational_entity` | `5d3aa15a638ec3a2b88363da4be5abf6` | (tool call in sequence against `bi04account`) | Missing entity set leading-digit resolution |
+| **3** | `query_relational` | `50ded7e28148ebe271f3f73f6370c32e` | `entity_name: bi04account`, `space_id: FTDWH_100_INT`, `top: 1` | Path segment mismatch & entity set resolution |
+| **4** | `analyze_column_distribution` | `94d1e5899ece6f127e9d7a3cc018edac8` | `asset_name: bi04account`, `column_name: *`, `space_id: FTDWH_100_INT` | Literal `*` passed as column parameter |
+| **5** | `get_relational_entity_metadata` | `3e9fd1c1bb54bed2879e43a29ed47bc3f` | `asset_id: bi04account`, `space_id: FTDWH_100_INT` | Upstream metadata serialization exception |
 
-### Incident Log Excerpt
+### Additional HANA Authentication Correlation ID (Work Order §5.1):
+- **Tool**: `hana_execute_sql`
+- **Correlation ID**: `1F1DF764B507294D8E595552BF47CA0D`
+- **Parameters**: `schema_name: FTDWH_100_INT`, `sql_query: SELECT COUNT(*) AS ROW_COUNT FROM 'FTW_COPA_CuFICO'`
+- **Round-Trip Duration**: 76 ms (failed at credential load / connection setup, indicating missing or malformed `DSP_OPEN_SCHEMA` secret in Kyma namespace).
+
+### Incident Log Excerpt (§4.1)
 ```text
 HTTP/1.1 500 Internal Server Error
 content-type: application/json;charset=utf-8
 sap-passport: 2A000000...
-x-correlation-id: 1F1DF764B507294D8E595552BF47CA0D
 
 {
   "error": {
-    "code": "500",
-    "message": "An internal server error occurred while processing the relational request. See correlation id 1F1DF764B507294D8E595552BF47CA0D"
+    "code": "INTERNAL_ERROR",
+    "message": "Unable to process request. Please try again later.",
+    "details": {
+      "stack": "See correlation id 1F1DF764B507294D8E595552BF47CA0D"
+    }
   }
 }
 ```

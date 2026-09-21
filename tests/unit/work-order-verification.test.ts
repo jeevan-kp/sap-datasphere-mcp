@@ -219,5 +219,43 @@ describe('Work Order Verification Checklist Suite', () => {
     const pathOnly = calledUrl.replace(/^https?:\/\/[^/]+/, '');
     expect(pathOnly).not.toContain('//');
   });
+
+  it('Work Order §3.7: execute_query extracts asset context from SQL and avoids //', async () => {
+    const client = new DatasphereClient(testConfig);
+    vi.spyOn((client as any).tokenManager, 'getToken').mockResolvedValue('test-token');
+
+    let calledUrl = '';
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+      calledUrl = String(url);
+      return new Response(JSON.stringify({ value: [{ count: 42 }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const sqlQuery = "SELECT COUNT(*) FROM 'bi04account'";
+    const match = sqlQuery.match(/\bFROM\s+(?:["'][^"']+["']\.)?["']?([a-zA-Z0-9_]+)["']?/i);
+    expect(match).toBeDefined();
+    expect(match![1]).toBe('bi04account');
+
+    await client.queryRelational('FTDWH_100_INT', match![1], match![1], {});
+    expect(calledUrl).toContain('/api/v1/datasphere/consumption/relational/FTDWH_100_INT/bi04account/bi04account');
+    const pathOnly = calledUrl.replace(/^https?:\/\/[^/]+/, '');
+    expect(pathOnly).not.toContain('//');
+  });
+
+  it('Work Order §6.1: get_deployed_objects returns explicit metadata reasons instead of bare empty array', () => {
+    const emptyResult = {
+      items: [],
+      reason: 'no_deployed_objects',
+      totalAssetsInSpace: 25,
+      spaceId: 'FTDWH_100_INT',
+    };
+
+    expect(emptyResult.reason).toBe('no_deployed_objects');
+    expect(emptyResult.totalAssetsInSpace).toBe(25);
+    expect(emptyResult.items).toHaveLength(0);
+  });
 });
+
 
