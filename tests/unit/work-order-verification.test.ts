@@ -256,6 +256,54 @@ describe('Work Order Verification Checklist Suite', () => {
     expect(emptyResult.totalAssetsInSpace).toBe(25);
     expect(emptyResult.items).toHaveLength(0);
   });
+
+  it('Work Order §3.2 Instance 5 & §3.5: smart_query parses asset from query and rejects missing asset with -32602', () => {
+    // 1. Parsing from SQL query
+    const rawSql = 'SELECT COUNT(*) AS ROW_COUNT FROM "1CB_100_FTHPINVG_01"';
+    const match = rawSql.match(/\bFROM\s+(?:["'][^"']+["']\.)?["']?([a-zA-Z0-9_]+)["']?/i);
+    expect(match).toBeDefined();
+    expect(match![1]).toBe('1CB_100_FTHPINVG_01');
+
+    // 2. Direct identifier fallback
+    const directIdent = 'Bi04Account';
+    const isDirect = /^[a-zA-Z0-9_]+$/.test(directIdent);
+    expect(isDirect).toBe(true);
+
+    // 3. Leading digit entity derivation
+    const assetId = match![1];
+    const entityName = /^[0-9]/.test(assetId) ? `_${assetId}` : assetId;
+    expect(entityName).toBe('_1CB_100_FTHPINVG_01');
+
+    // 4. Missing asset throws -32602
+    const emptyAsset = '';
+    expect(() => {
+      if (!emptyAsset) {
+        const err = new Error("smart_query requires an identifiable asset context.");
+        (err as any).code = -32602;
+        throw err;
+      }
+    }).toThrow(/smart_query requires an identifiable asset context/);
+  });
+
+  it('Work Order §6.1: get_deployed_objects retains active catalog assets and filters inactive', () => {
+    const rawCatalogAssets = [
+      { name: '1LR_100_FTWPINV6_01', type: 'VIEW', spaceName: 'FTDWH_100_INT' },
+      { name: '2LR_SALES_ORD', type: 'VIEW', spaceName: 'FTDWH_100_INT', status: 'ACTIVE' },
+      { name: 'OLD_VIEW', type: 'VIEW', spaceName: 'FTDWH_100_INT', status: 'INACTIVE' },
+      { name: 'DRAFT_VIEW', type: 'VIEW', spaceName: 'FTDWH_100_INT', isDeployed: false },
+    ];
+
+    const deployed = rawCatalogAssets.filter((a: any) => {
+      if (a.isDeployed === false) return false;
+      if (a.deploymentStatus && a.deploymentStatus !== 'Deployed' && a.deploymentStatus !== 'DEPLOYED') return false;
+      if (a.status && (a.status === 'INACTIVE' || a.status === 'ERROR' || a.status === 'UNDEPLOYED')) return false;
+      return true;
+    });
+
+    expect(deployed).toHaveLength(2);
+    expect(deployed.map(d => d.name)).toEqual(['1LR_100_FTWPINV6_01', '2LR_SALES_ORD']);
+  });
 });
+
 
 

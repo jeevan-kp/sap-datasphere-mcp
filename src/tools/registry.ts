@@ -50,6 +50,22 @@ const foundationTools: ToolDefinition[] = [
       required: [],
     },
   },
+  {
+    name: 'test_hana_connection',
+    description: "Explicitly probe the SAP HANA Cloud / Open SQL Schema connection. Validates host, user, password, and schema accessibility at startup. PREREQUISITES: DSP_host, DSP_Hana_user, DSP_PASSWORD, and DSP_OPEN_SCHEMA configured. RETURNS: Connection health status and current schema details.",
+    category: 'foundation',
+    requiresAuth: true,
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        space_id: {
+          type: 'string',
+          description: 'Optional space ID / Open SQL schema to validate mapping for.',
+        },
+      },
+      required: [],
+    },
+  },
 ];
 
 const spaceTools: ToolDefinition[] = [

@@ -345,19 +345,79 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       }
 
       case 'smart_query': {
-        const { spaceId, assetId, entityName } = resolveNormalizedParams(args);
-        const params: Record<string, string> = {};
+        const { spaceId: resolvedSpace } = resolveNormalizedParams(args);
+        const spaceId = resolvedSpace || 'FTDWH_100_INT';
+        const rawQuery = ((args.query || args.sql_query || args.sql || '') as string).trim();
+
+        // 1. Direct HANA Cloud execution if HANA is configured and query is SQL
+        if (hanaClient && rawQuery && /^\s*(SELECT|WITH)\b/i.test(rawQuery)) {
+          try {
+            const hanaRes = await hanaClient.executeQuery(rawQuery, spaceId);
+            if (hanaRes.success) {
+              return textResult(JSON.stringify(hanaRes, null, 2));
+            }
+          } catch {
+            // Fall back to OData relational query
+          }
+        }
+
+        // 2. Extract asset_id from args or query string (Work Order §3.2 Instance 5 & §3.5)
+        let assetId = ((args.asset_id || args.asset_name || args.table_name || '') as string).trim();
+        if (!assetId && rawQuery) {
+          const match = rawQuery.match(/\bFROM\s+(?:["'][^"']+["']\.)?["']?([a-zA-Z0-9_]+)["']?/i);
+          if (match && match[1]) {
+            assetId = match[1].trim();
+          } else if (/^[a-zA-Z0-9_]+$/.test(rawQuery)) {
+            // User passed a direct asset identifier as the query
+            assetId = rawQuery;
+          }
+        }
+
+        // Must reject unidentifiable asset context before any network call to prevent // empty segments
+        if (!assetId) {
+          const err = new Error("smart_query requires an identifiable asset context. Specify 'asset_id' or include a valid table name in 'query' (e.g. SELECT ... FROM <table>).");
+          (err as any).code = -32602;
+          throw err;
+        }
+
+        if (assetId.includes('.')) {
+          assetId = assetId.replace(/\./g, '_');
+        }
+
+        let entityName = ((args.entity_name || assetId) as string).trim();
+        if (/^[0-9]/.test(assetId) && !entityName.startsWith('_')) {
+          entityName = `_${assetId}`;
+        }
+
+        const params: Record<string, string> = {
+          '$top': String((args.limit as number) || (args.top as number) || 100),
+        };
         if (args.select) params.$select = args.select as string;
         if (args.filter) params.$filter = args.filter as string;
-        if (args.top) params.$top = String(args.top);
         if (args.skip) params.$skip = String(args.skip);
-        const result = await client!.queryRelational(
-          spaceId,
-          assetId,
-          entityName,
-          params
-        );
-        return textResult(JSON.stringify(result, null, 2));
+
+        try {
+          const result = await client!.queryRelational(
+            spaceId,
+            assetId,
+            entityName,
+            params
+          );
+          return textResult(JSON.stringify(result, null, 2));
+        } catch (err: any) {
+          if (err.statusCode === 404 || err.code === -32602) {
+            try {
+              const entitiesRes = await client!.listRelationalEntities(spaceId, assetId) as { value?: Array<{ name: string }> };
+              const available = entitiesRes?.value?.map(e => e.name) || [];
+              if (available.length > 0) {
+                err.message = `${err.message}. Available entity sets for asset '${assetId}': [${available.join(', ')}].`;
+              }
+            } catch {
+              // ignore secondary lookup error
+            }
+          }
+          throw err;
+        }
       }
 
       case 'query_relational': {
@@ -1053,21 +1113,56 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
             all = [];
           }
         }
-        const deployed = all.filter((a: any) =>
-          a.deploymentStatus === 'Deployed' ||
-          a.status === 'Deployed' ||
-          a.isDeployed === true
-        );
-        if (deployed.length === 0) {
+
+        // Also query CLI views and local-tables if CLI is configured and catalog was empty
+        if (all.length === 0 && cli && spaceId) {
+          try {
+            const viewsRes = await cli.listObjects('views', spaceId);
+            if (viewsRes.success && viewsRes.output) {
+              const parsed = JSON.parse(viewsRes.output);
+              const views = Array.isArray(parsed) ? parsed : (parsed?.objects || []);
+              all.push(...views);
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        // In Datasphere Catalog, assets represent deployed modeling artifacts unless explicitly marked inactive/undeployed
+        const deployed = all.filter((a: any) => {
+          if (a.isDeployed === false) return false;
+          if (a.deploymentStatus && a.deploymentStatus !== 'Deployed' && a.deploymentStatus !== 'DEPLOYED') return false;
+          if (a.status && (a.status === 'INACTIVE' || a.status === 'ERROR' || a.status === 'UNDEPLOYED')) return false;
+          return true;
+        });
+
+        if (all.length === 0) {
           // Work Order §6.1: Return explicit metadata rather than bare empty array
           return textResult(JSON.stringify({
             items: [],
-            reason: all.length === 0 ? 'no_assets_in_space' : 'no_deployed_objects',
-            totalAssetsInSpace: all.length,
+            reason: 'no_assets_in_space',
+            totalAssetsInSpace: 0,
             spaceId: spaceId || 'ALL',
+            guidance: `No assets found in space "${spaceId}". Verify that the space exists and contains modeling artifacts.`,
           }, null, 2));
         }
-        return textResult(JSON.stringify({ items: deployed, count: deployed.length, spaceId: spaceId || 'ALL' }, null, 2));
+
+        if (deployed.length === 0) {
+          return textResult(JSON.stringify({
+            items: [],
+            reason: 'no_deployed_objects',
+            totalAssetsInSpace: all.length,
+            spaceId: spaceId || 'ALL',
+            guidance: `Found ${all.length} asset(s) in space "${spaceId}", but none are in an active deployed state.`,
+          }, null, 2));
+        }
+
+        return textResult(JSON.stringify({
+          items: deployed,
+          count: deployed.length,
+          totalAssetsInSpace: all.length,
+          spaceId: spaceId || 'ALL',
+        }, null, 2));
       }
 
       case 'list_database_users': {
@@ -1137,6 +1232,28 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         return textResult(JSON.stringify(MOCK_CONNECTIONS, null, 2));
       }
 
+
+      case 'test_hana_connection': {
+        if (!hanaClient) {
+          return errorResult(
+            'HANA Database connection not configured in .env or Kyma secret (DSP_host, DSP_Hana_user, DSP_PASSWORD, DSP_OPEN_SCHEMA required)',
+            -32002
+          );
+        }
+        const targetSchema = (args.space_id || args.schema_name) as string | undefined;
+        const probe = await hanaClient.executeQuery('SELECT CURRENT_USER, CURRENT_SCHEMA FROM DUMMY', targetSchema);
+        if (!probe.success) {
+          const isAuth = /authentication|not authorised|credential|password|locked/i.test(probe.error || '');
+          const correlationId = extractCorrelationId(probe.error);
+          return errorResult(probe.error || 'HANA probe failed', isAuth ? -32002 : -32603, correlationId);
+        }
+        return textResult(JSON.stringify({
+          status: 'success',
+          hanaStatus: 'Connected',
+          details: probe.rows?.[0] || {},
+          schema: targetSchema || 'DEFAULT',
+        }, null, 2));
+      }
 
       case 'hana_execute_sql': {
         if (!hanaClient) {
