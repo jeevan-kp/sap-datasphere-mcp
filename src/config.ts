@@ -62,7 +62,7 @@ export function loadConfig(): AppConfig {
   const hanaHost = getRawEnv('DSP_host');
   const hanaUser = getRawEnv('DSP_Hana_user');
   const hanaPassword = getRawEnv('DSP_PASSWORD');
-  const hanaSchema = getRawEnv('DSP_OPEN_SCHEME', hanaUser);
+  const hanaSchema = getRawEnv('DSP_OPEN_SCHEMA', getRawEnv('DSP_OPEN_SCHEME', hanaUser));
   const hanaPort = parseInt(getRawEnv('DSP_port', '443'), 10);
 
   const hanaConfig = hanaHost && hanaUser ? {

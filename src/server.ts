@@ -1464,7 +1464,11 @@ async function main() {
     return server;
   }
 
-  if (config.server.transport === 'http') {
+  const transportType = process.argv.includes('--transport')
+    ? process.argv[process.argv.indexOf('--transport') + 1]
+    : config.server.transport;
+
+  if (transportType === 'http') {
     const express = (await import('express')).default;
     const app = express();
     app.use(express.json());
